@@ -145,9 +145,8 @@ public class QuestDispatcher {
         progress.questSnapshot = quest;
         progress.currentStepIndex = 0;
         progress.questStartTime = System.currentTimeMillis();
-        progress.stepStartTimes = new HashMap<>();
-        progress.stepStartTimes.put(0, progress.questStartTime);
-        progress.stepAccumulatedMillis = new HashMap<>();
+        progress.currentStepSessionStartTime = progress.questStartTime;
+        progress.previousSessionsStepDurationsMillis = new HashMap<>();
         progress.stepLinesRidden = new HashMap<>();
         progress.resetStepStates();
 
@@ -173,6 +172,7 @@ public class QuestDispatcher {
 
     private void advanceQuestStep(PlayerProfile profile, QuestProgress progress, Quest quest, ServerPlayer player) {
         long now = System.currentTimeMillis();
+        progress.finalizeCurrentStep(now);
         progress.currentStepIndex++;
         callback.onStepCompleted(this, profile.playerUuid, quest, progress);
 
@@ -191,8 +191,7 @@ public class QuestDispatcher {
             completionData.stepDetails = new HashMap<>();
             completionData.durationMillis = 0;
             for (int i = 0; i < quest.steps.size(); i++) {
-                long stepEndTimestamp = progress.stepStartTimes.getOrDefault(i + 1, now);
-                long duration = progress.getStepDuration(i, stepEndTimestamp);
+                long duration = progress.previousSessionsStepDurationsMillis.getOrDefault(i, 0L);
 
                 Step step = quest.steps.get(i);
                 String description = step.getDisplayRepr().getString();
@@ -225,7 +224,7 @@ public class QuestDispatcher {
             }
         } else {
             progress.resetStepStates();
-            progress.stepStartTimes.put(progress.currentStepIndex, now);
+            progress.currentStepSessionStartTime = now;
         }
     }
 
