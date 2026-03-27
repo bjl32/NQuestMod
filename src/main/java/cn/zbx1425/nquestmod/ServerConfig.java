@@ -87,6 +87,8 @@ public class ServerConfig {
 
     public ConfigItem<UUID> commandSigningKey;
 
+    public ConfigItem<String> websiteUrl;
+
     private Path path;
 
     private static <T extends Enum<T>> T parseEnum(String name, Class<T> enumClass) {
@@ -106,6 +108,8 @@ public class ServerConfig {
 
         commandSigningKey = new ConfigItem<UUID>(json, "commandSigningKey", () -> null, UUID::fromString);
 
+        websiteUrl = new ConfigItem<>(json, "websiteUrl", "", value -> value);
+
         if (!Files.exists(configPath)) save(configPath);
     }
 
@@ -118,6 +122,8 @@ public class ServerConfig {
         webSyncPollIntervalSeconds.writeJson(json);
 
         commandSigningKey.writeJson(json);
+
+        websiteUrl.writeJson(json);
 
         Files.writeString(configPath, new GsonBuilder().setPrettyPrinting().create().toJson(json));
     }

@@ -7,7 +7,9 @@ import cn.zbx1425.nquestmod.data.ranking.RankingApiClient;
 import eu.pb4.sgui.api.elements.GuiElementBuilder;
 import eu.pb4.sgui.api.gui.BaseSlotGui;
 import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.MenuType;
@@ -22,12 +24,17 @@ import java.util.function.Supplier;
 
 public class LeaderboardScreen extends TabbedItemListGui<Object, LeaderboardScreen.LeaderboardType, LeaderboardScreen.TimeRange> {
 
-    public enum LeaderboardType { QP, COMPLETIONS, SPEEDRUN }
+    public enum LeaderboardType { QP, COMPLETIONS, SPEEDRUN, WEBSITE }
     public enum TimeRange { ALL_TIME, MONTHLY }
     public static final List<Pair<LeaderboardType, Supplier<GuiElementBuilder>>> PRIMARY_TABS = List.of(
         Pair.of(LeaderboardType.QP, () -> new GuiElementBuilder(Items.DIAMOND).setName(Component.literal("Total QP"))),
         Pair.of(LeaderboardType.COMPLETIONS, () -> new GuiElementBuilder(Items.EXPERIENCE_BOTTLE).setName(Component.literal("Total Completions"))),
-        Pair.of(LeaderboardType.SPEEDRUN, () -> new GuiElementBuilder(Items.OAK_HANGING_SIGN).setName(Component.literal("Quest Speedruns")))
+        Pair.of(LeaderboardType.SPEEDRUN, () -> new GuiElementBuilder(Items.OAK_HANGING_SIGN).setName(Component.literal("Quest Speedruns"))),
+        Pair.of(LeaderboardType.WEBSITE, () -> new GuiElementBuilder(Items.SPYGLASS).setName(Component.literal("View on Website"))
+            .addLoreLine(Component.literal("It's easier to navigate the leaderboards").withStyle(ChatFormatting.GRAY))
+            .addLoreLine(Component.literal("on the website!").withStyle(ChatFormatting.GRAY))
+            .addLoreLine(Component.literal("Click to open").withStyle(ChatFormatting.GOLD))
+        )
     );
     public static final List<Pair<TimeRange, Supplier<GuiElementBuilder>>> SECONDARY_TABS = List.of(
         Pair.of(TimeRange.ALL_TIME, () -> new GuiElementBuilder(Items.GOLD_BLOCK).setName(Component.literal("All-Time"))),
@@ -50,6 +57,26 @@ public class LeaderboardScreen extends TabbedItemListGui<Object, LeaderboardScre
             new QuestListScreen(QuestListScreen.Purpose.VIEW_SPEEDRUN, player, this, (quest, listScreen) -> {
                 new QuestSpeedrunScreen(player, listScreen, quest, selectedSecondaryTab == TimeRange.MONTHLY).open();
             }).open();
+            return;
+        } else if (selectedPrimaryTab == LeaderboardType.WEBSITE) {
+            close();
+            player.sendSystemMessage(Component.literal(" "));
+            player.sendSystemMessage(Component.literal(" "));
+            player.sendSystemMessage(Component.literal("    ")
+                .append(Component.literal("Press 'T'").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
+                .append(Component.literal(", then click on the link below:")
+                    .withStyle(Style.EMPTY.withColor(ChatFormatting.WHITE).withBold(false)))
+            );
+            player.sendSystemMessage(Component.literal("    ")
+                .append(Component.literal(NQuestMod.SERVER_CONFIG.websiteUrl.value)
+                    .withStyle(Style.EMPTY
+                        .withColor(ChatFormatting.AQUA)
+                        .withUnderlined(true)
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, NQuestMod.SERVER_CONFIG.websiteUrl.value))
+                    ))
+            );
+            player.sendSystemMessage(Component.literal(" "));
+            player.sendSystemMessage(Component.literal(" "));
             return;
         }
         super.init();
