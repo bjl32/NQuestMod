@@ -5,7 +5,7 @@ import cn.zbx1425.nquestmod.data.QuestPersistence;
 import cn.zbx1425.nquestmod.data.QuestSyncClient;
 import cn.zbx1425.nquestmod.data.quest.QuestCategory;
 import cn.zbx1425.nquestmod.data.quest.PlayerProfile;
-import cn.zbx1425.nquestmod.data.ranking.LocalProfileStorage;
+import cn.zbx1425.nquestmod.data.QuestProgressPersistence;
 import cn.zbx1425.nquestmod.data.ranking.PendingCompletions;
 import cn.zbx1425.nquestmod.data.ranking.RankingApiClient;
 import cn.zbx1425.nquestmod.interop.GenerationStatus;
@@ -38,7 +38,7 @@ public class NQuestMod implements ModInitializer {
 
     public QuestPersistence questStorage;
     public RankingApiClient rankingApi;
-    public LocalProfileStorage profileStorage;
+    public QuestProgressPersistence profileStorage;
     public PendingCompletions pendingCompletions;
     public QuestDispatcher questDispatcher;
     public QuestNotifications questNotifications;
@@ -62,7 +62,7 @@ public class NQuestMod implements ModInitializer {
                 questCategories = questStorage.loadQuestCategories();
 
                 rankingApi = new RankingApiClient(SERVER_CONFIG);
-                profileStorage = new LocalProfileStorage(basePath);
+                profileStorage = new QuestProgressPersistence(basePath);
                 pendingCompletions = new PendingCompletions(basePath);
 
                 questNotifications = new QuestNotifications(server);

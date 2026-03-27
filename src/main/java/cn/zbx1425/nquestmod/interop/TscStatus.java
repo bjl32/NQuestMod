@@ -46,7 +46,7 @@ public class TscStatus {
         Collection<NameIdData> stations,
         NameIdData trainLine,
         boolean trainDoorClosed,
-        double trainSpeedMps
+        double trainSpeedKmph
     ) {
 
         public ClientState(Collection<NameIdData> stations) {

@@ -5,7 +5,6 @@ import cn.zbx1425.nquestmod.interop.TscStatus;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import org.mtr.core.data.Position;
 import org.mtr.core.data.Station;
-import org.mtr.core.data.Vehicle;
 import org.mtr.core.data.VehicleExtraData;
 import org.mtr.core.simulation.Simulator;
 import org.spongepowered.asm.mixin.Mixin;
@@ -49,10 +48,11 @@ public class SimulatorMixin {
         });
 
         simulator.sidings.forEach(siding ->
-            ((SidingAccessor)(Object)siding).getVehicles().forEach(vehicle ->
+            ((SidingAccessor)(Object) siding).getVehicles().forEach(vehicle ->
                 vehicle.vehicleExtraData.iterateRidingEntities(vehicleRidingEntity -> {
                     final TscStatus.ClientState client = TscStatus.CLIENTS.get(vehicleRidingEntity.uuid);
                     final VehicleExtraData vehicleExtraData = vehicle.vehicleExtraData;
+                    final VehicleAccessor vehicleAccessor = (VehicleAccessor) vehicle;
                     if (client != null) {
                         long routeId = vehicleExtraData.getThisRouteId();
                         if (routeId == 0) routeId = vehicleExtraData.getPreviousRouteId();
@@ -60,13 +60,9 @@ public class SimulatorMixin {
                         TscStatus.CLIENTS.put(vehicleRidingEntity.uuid, new TscStatus.ClientState(
                                 client,
                                 simulator.routeIdMap.get(routeId),
-                                vehicleExtraData.getDoorMultiplier() == -1,
-                            ((VehicleAccessor)vehicle).getSpeed() * 1000
+                                vehicleExtraData.getDoorMultiplier() == -1 && vehicleAccessor.getDoorCooldown() == 0,
+                                ((VehicleSchemaAccessor)vehicle).getSpeed() * 1000 * 3.6
                         ));
-                        // NQuestMod.LOGGER.info("Door {}, Speed {} km/h",
-                        //         vehicleExtraData.getDoorMultiplier() == -1 ? "Close" : "Open",
-                        //         ((VehicleAccessor)vehicle).getSpeed() * 1000 * 3.6
-                        // );
                     }
                 })
             )

@@ -6,19 +6,19 @@ import net.minecraft.server.level.ServerPlayer;
 
 public class OverSpeedCriterion implements Criterion {
 
-    public double maxSpeedMps;
+    public double maxSpeedKmph;
 
-    public OverSpeedCriterion(double maxSpeedMps) {
-        this.maxSpeedMps = maxSpeedMps;
+    public OverSpeedCriterion(double maxSpeedKmph) {
+        this.maxSpeedKmph = maxSpeedKmph;
     }
 
     @Override
     public boolean evaluate(ServerPlayer player, CriterionContext ctx) {
-        return TscStatus.getClientState(player).trainSpeedMps() > maxSpeedMps;
+        return TscStatus.getClientState(player).trainSpeedKmph() > maxSpeedKmph;
     }
 
     @Override
     public Component getDisplayRepr() {
-        return Component.literal("Move faster than " + String.format("%.1f", maxSpeedMps * 3600 / 1000) + " km/h");
+        return Component.literal("Move faster than " + String.format("%.1f", maxSpeedKmph) + " km/h");
     }
 }

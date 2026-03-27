@@ -1,7 +1,6 @@
-package cn.zbx1425.nquestmod.data.ranking;
+package cn.zbx1425.nquestmod.data;
 
 import cn.zbx1425.nquestmod.NQuestMod;
-import cn.zbx1425.nquestmod.data.NQuestGson;
 import cn.zbx1425.nquestmod.data.quest.QuestProgress;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -16,15 +15,15 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-public class LocalProfileStorage {
+public class QuestProgressPersistence {
 
     private static final Type ACTIVE_QUESTS_TYPE = new TypeToken<Map<String, QuestProgress>>() {}.getType();
 
     private final Path profilesDir;
     private final Gson gson = NQuestGson.INSTANCE;
 
-    public LocalProfileStorage(Path basePath) throws IOException {
-        this.profilesDir = basePath.resolve("profiles");
+    public QuestProgressPersistence(Path basePath) throws IOException {
+        this.profilesDir = basePath.resolve("quest_sessions");
         Files.createDirectories(profilesDir);
     }
 
@@ -37,7 +36,7 @@ public class LocalProfileStorage {
             Map<String, QuestProgress> result = gson.fromJson(reader, ACTIVE_QUESTS_TYPE);
             return result != null ? result : new HashMap<>();
         } catch (Exception e) {
-            NQuestMod.LOGGER.error("Failed to load local profile for {}", playerUuid, e);
+            NQuestMod.LOGGER.error("Failed to load quest progress for {}", playerUuid, e);
             return new HashMap<>();
         }
     }
@@ -48,14 +47,14 @@ public class LocalProfileStorage {
             try {
                 Files.deleteIfExists(file);
             } catch (IOException e) {
-                NQuestMod.LOGGER.error("Failed to delete local profile for {}", playerUuid, e);
+                NQuestMod.LOGGER.error("Failed to delete quest progress for {}", playerUuid, e);
             }
             return;
         }
         try (Writer writer = Files.newBufferedWriter(file)) {
             gson.toJson(activeQuests, ACTIVE_QUESTS_TYPE, writer);
         } catch (IOException e) {
-            NQuestMod.LOGGER.error("Failed to save local profile for {}", playerUuid, e);
+            NQuestMod.LOGGER.error("Failed to save quest progress for {}", playerUuid, e);
         }
     }
 }

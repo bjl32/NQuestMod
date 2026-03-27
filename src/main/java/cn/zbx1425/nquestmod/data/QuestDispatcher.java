@@ -94,7 +94,7 @@ public class QuestDispatcher {
 
                 TscStatus.ClientState state = TscStatus.getClientState(player);
                 // Only count lines when train is actually moving
-                if (state != null && state.trainLine() != null && state.trainSpeedMps() > 19 / 3.6) {
+                if (state != null && state.trainLine() != null && state.trainSpeedKmph() > 19) {
                     progress.ensureInitialized();
                     List<String> lines = progress.stepLinesRidden
                             .computeIfAbsent(progress.currentStepIndex, k -> new ArrayList<>());
