@@ -63,12 +63,12 @@ public class QuestNotifications implements IQuestCallbacks {
         if (progress.currentStepIndex > 0) {
             Step completedStep = quest.steps.get(progress.currentStepIndex - 1);
             player.sendSystemMessage(Component.literal("✔ Step Complete: ").withStyle(ChatFormatting.GREEN)
-                .append(completedStep.criteria.getDisplayRepr()), false);
+                .append(Component.literal(completedStep.criteria.getDisplayRepr().getString()).withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC)), false);
         }
 
         if (progress.currentStepIndex < quest.steps.size()) {
             Step nextStep = quest.steps.get(progress.currentStepIndex);
-            MutableComponent nextStepMsg = Component.literal("▶ Next: ").withStyle(ChatFormatting.AQUA)
+            MutableComponent nextStepMsg = Component.literal("▶ Next: ").withStyle(ChatFormatting.GOLD)
                     .append(nextStep.criteria.getDisplayRepr());
             player.sendSystemMessage(nextStepMsg, false);
         }
@@ -85,9 +85,9 @@ public class QuestNotifications implements IQuestCallbacks {
                 .withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD).withBold(true)), false);
         player.sendSystemMessage(Component.literal(quest.name).withStyle(ChatFormatting.YELLOW), false);
         player.sendSystemMessage(Component.literal("  Time taken: ").withStyle(ChatFormatting.WHITE)
-                .append(Component.literal(formatDuration(data.durationMillis)).withStyle(ChatFormatting.AQUA)), false);
+                .append(Component.literal(formatDuration(data.durationMillis)).withStyle(ChatFormatting.GREEN)), false);
         player.sendSystemMessage(Component.literal("  Quest Points: ").withStyle(ChatFormatting.WHITE)
-                .append(Component.literal("+" + quest.questPoints + " QP").withStyle(ChatFormatting.GREEN)), false);
+                .append(Component.literal("+" + quest.questPoints + " QP").withStyle(ChatFormatting.AQUA)), false);
 
         if (debug) {
             player.sendSystemMessage(Component.literal("  NOTE: Ask a staff to DISQUALIFY this completion " +
@@ -108,11 +108,11 @@ public class QuestNotifications implements IQuestCallbacks {
 
             if (isWorldRecord) {
                 player.sendSystemMessage(Component.literal("  World Record!")
-                        .withStyle(Style.EMPTY.withColor(ChatFormatting.GREEN).withBold(true)), false);
+                        .withStyle(Style.EMPTY.withColor(ChatFormatting.RED).withBold(true)), false);
                 sendSoundEffect(player, SoundEvents.PLAYER_LEVELUP, 1.0f, 1.5f);
             } else if (isPersonalBest) {
                 player.sendSystemMessage(Component.literal("  Personal Best!")
-                        .withStyle(Style.EMPTY.withColor(ChatFormatting.GREEN).withBold(true)), false);
+                        .withStyle(Style.EMPTY.withColor(ChatFormatting.BLUE).withBold(true)), false);
                 sendSoundEffect(player, SoundEvents.PLAYER_LEVELUP, 0.8f, 1.2f);
             }
 

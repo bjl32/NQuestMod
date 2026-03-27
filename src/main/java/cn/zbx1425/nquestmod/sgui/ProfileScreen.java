@@ -53,12 +53,12 @@ public class ProfileScreen extends ParentedGui {
                 .setName(Component.literal(player.getGameProfile().getName()))
         );
 
-        setSlot(11, new GuiElementBuilder(Items.EXPERIENCE_BOTTLE)
+        setSlot(11, new GuiElementBuilder(Items.DIAMOND)
                 .setName(Component.literal("Quest Points"))
                 .addLoreLine(Component.literal(String.valueOf(profile.qpBalance)).withStyle(ChatFormatting.GREEN))
         );
 
-        setSlot(13, new GuiElementBuilder(Items.EMERALD)
+        setSlot(13, new GuiElementBuilder(Items.EXPERIENCE_BOTTLE)
                 .setName(Component.literal("Total Quests Completed"))
                 .addLoreLine(Component.literal(String.valueOf(profile.totalQuestCompletions)).withStyle(ChatFormatting.GREEN))
         );

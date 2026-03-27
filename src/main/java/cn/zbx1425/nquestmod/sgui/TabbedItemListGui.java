@@ -42,7 +42,7 @@ public abstract class TabbedItemListGui<TItem, TPrimaryTab, TSecondaryTab> exten
             GuiElementBuilder element = tab.getValue().get();
             if (tabKey.equals(selectedPrimaryTab)) {
                 element.glow();
-                element.setCount(64);
+                element.setCount(99);
             }
             element.setCallback((index, type, action) -> {
                 if (!tabKey.equals(selectedPrimaryTab)) {
@@ -62,7 +62,7 @@ public abstract class TabbedItemListGui<TItem, TPrimaryTab, TSecondaryTab> exten
                 GuiElementBuilder element = tab.getValue().get();
                 if (tabKey.equals(selectedSecondaryTab)) {
                     element.glow();
-                    element.setCount(64);
+                    element.setCount(99);
                 }
                 element.setCallback((index, type, action) -> {
                     if (!tabKey.equals(selectedSecondaryTab)) {

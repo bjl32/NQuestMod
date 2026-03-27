@@ -38,13 +38,13 @@ public class MainMenuScreen extends SimpleGui {
                 .setName(Component.literal("Start a Quest"))
                 .addLoreLine(Component.literal("View and start available quests.").withStyle(ChatFormatting.GRAY))
                 .setCallback((index, type, action) -> {
-                    new QuestListScreen(player, this, this::openStartQuestConfirmation).open();
+                    new QuestListScreen(QuestListScreen.Purpose.START_QUEST, player, this, this::openStartQuestConfirmation).open();
                 })
             );
         }
 
         // Leaderboards
-        setSlot(13, new GuiElementBuilder(Items.SPYGLASS)
+        setSlot(13, new GuiElementBuilder(Items.OAK_HANGING_SIGN)
                 .setName(Component.literal("Leaderboards"))
                 .addLoreLine(Component.literal("Check out the top players.").withStyle(ChatFormatting.GRAY))
                 .setCallback((index, type, action) -> {
@@ -67,8 +67,7 @@ public class MainMenuScreen extends SimpleGui {
     private void openStartQuestConfirmation(Quest quest, QuestListScreen listScreen) {
         new DialogGui(player, listScreen,
                 Component.literal("Start Quest?"),
-                new GuiElementBuilder(Items.BOOK)
-                        .setName(Component.literal(quest.name)),
+                QuestListScreen.setupQuestGuiElement(new GuiElementBuilder(Items.BOOK), quest),
                 (gui) -> {
                     try {
                         NQuestMod.INSTANCE.questDispatcher.startQuest(player, quest.id);

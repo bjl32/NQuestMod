@@ -45,7 +45,7 @@ public class QuestCompletionDetailScreen extends ItemListGui<Map.Entry<Integer, 
         setSlot(1, buildPlayerEntry(player.getServer(), completionData.playerUuid,
                 name -> Component.literal("Completed by: " + name))
         );
-        setSlot(2, new GuiElementBuilder(Items.EMERALD)
+        setSlot(2, new GuiElementBuilder(Items.DIAMOND)
                 .setName(Component.literal("QPs Awarded: " + completionData.questPoints))
         );
 

@@ -26,8 +26,8 @@ public class LeaderboardScreen extends TabbedItemListGui<Object, LeaderboardScre
     public enum TimeRange { ALL_TIME, MONTHLY }
     public static final List<Pair<LeaderboardType, Supplier<GuiElementBuilder>>> PRIMARY_TABS = List.of(
         Pair.of(LeaderboardType.QP, () -> new GuiElementBuilder(Items.DIAMOND).setName(Component.literal("Total QP"))),
-        Pair.of(LeaderboardType.COMPLETIONS, () -> new GuiElementBuilder(Items.EMERALD).setName(Component.literal("Total Completions"))),
-        Pair.of(LeaderboardType.SPEEDRUN, () -> new GuiElementBuilder(Items.CLOCK).setName(Component.literal("Quest Speedruns")))
+        Pair.of(LeaderboardType.COMPLETIONS, () -> new GuiElementBuilder(Items.EXPERIENCE_BOTTLE).setName(Component.literal("Total Completions"))),
+        Pair.of(LeaderboardType.SPEEDRUN, () -> new GuiElementBuilder(Items.OAK_HANGING_SIGN).setName(Component.literal("Quest Speedruns")))
     );
     public static final List<Pair<TimeRange, Supplier<GuiElementBuilder>>> SECONDARY_TABS = List.of(
         Pair.of(TimeRange.ALL_TIME, () -> new GuiElementBuilder(Items.GOLD_BLOCK).setName(Component.literal("All-Time"))),
@@ -47,7 +47,7 @@ public class LeaderboardScreen extends TabbedItemListGui<Object, LeaderboardScre
     public void init() {
         if (selectedPrimaryTab == LeaderboardType.SPEEDRUN) {
             selectedPrimaryTab = LeaderboardType.QP;
-            new QuestListScreen(player, parent, (quest, listScreen) -> {
+            new QuestListScreen(QuestListScreen.Purpose.VIEW_SPEEDRUN, player, this, (quest, listScreen) -> {
                 new QuestSpeedrunScreen(player, listScreen, quest, selectedSecondaryTab == TimeRange.MONTHLY).open();
             }).open();
             return;

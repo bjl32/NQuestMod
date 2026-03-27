@@ -20,15 +20,15 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class QuestListScreen extends TabbedItemListGui<Quest, Pair<String, QuestCategory>, Void> {
 
+    private final Purpose purpose;
     private final BiConsumer<Quest, QuestListScreen> callback;
 
-    public QuestListScreen(ServerPlayer player, BaseSlotGui parent, BiConsumer<Quest, QuestListScreen> callback) {
+    public QuestListScreen(Purpose purpose, ServerPlayer player, BaseSlotGui parent, BiConsumer<Quest, QuestListScreen> callback) {
         super(MenuType.GENERIC_9x4, player, parent,
                 NQuestMod.INSTANCE.questCategories.entrySet().stream()
                     .filter(c -> !c.getValue().hidden || NQuestMod.INSTANCE.questDispatcher.isDebugMode(player.getGameProfile().getId()))
@@ -48,8 +48,9 @@ public class QuestListScreen extends TabbedItemListGui<Quest, Pair<String, Quest
                     .toList(),
                 null, null
         );
+        this.purpose = purpose;
         this.callback = callback;
-        setTitle(Component.literal("Select a Quest"));
+        setTitle(Component.literal(purpose.title));
         init();
     }
 
@@ -85,13 +86,18 @@ public class QuestListScreen extends TabbedItemListGui<Quest, Pair<String, Quest
 
     @Override
     protected GuiElementBuilder createElementForItem(Quest item, int index) {
+        GuiElementBuilder builder = new GuiElementBuilder(Items.BOOK);
+        builder.addLoreLine(Component.literal(purpose.hoverText).withStyle(ChatFormatting.GOLD));
+        return setupQuestGuiElement(builder, item)
+                .setCallback((i, t, a) -> this.callback.accept(item, this));
+    }
+
+    public static GuiElementBuilder setupQuestGuiElement(GuiElementBuilder builder, Quest item) {
         QuestCategory cat = NQuestMod.INSTANCE.questCategories.get(item.category);
         QuestTier tier = null;
         if (cat != null && cat.tiers != null) {
             tier = cat.tiers.get(item.tier);
         }
-
-        GuiElementBuilder builder = new GuiElementBuilder(Items.BOOK);
         if (tier != null) {
             builder.setItem(BuiltInRegistries.ITEM.getOptional(new ResourceLocation(tier.icon)).orElse(Items.STONE));
             builder.addLoreLine(Component.literal("Tier: " + tier.name).withStyle(ChatFormatting.YELLOW));
@@ -107,9 +113,23 @@ public class QuestListScreen extends TabbedItemListGui<Quest, Pair<String, Quest
         }
 
         Component displayName = effectiveStatus == Quest.QuestStatus.PUBLIC
-                ? Component.literal(item.name)
-                : Component.literal(item.name).withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC);
-        return builder.setName(displayName)
-                .setCallback((i, t, a) -> this.callback.accept(item, this));
+            ? Component.literal(item.name)
+            : Component.literal(item.name).withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC);
+        builder.setName(displayName);
+
+        return builder;
+    }
+
+    public enum Purpose {
+        START_QUEST("Which Quest?", "Click to Start"),
+        VIEW_SPEEDRUN("Which Leaderboard?", "Click for Speedrun Leaderboard"),;
+
+        final String title;
+        final String hoverText;
+
+        Purpose(String title, String hoverText) {
+            this.title = title;
+            this.hoverText = hoverText;
+        }
     }
 }

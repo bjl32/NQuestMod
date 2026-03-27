@@ -43,14 +43,13 @@ public class CurrentQuestScreen extends ItemListGui<Step> {
         super.init();
 
         if (quest == null) return;
-        setSlot(9 * 2 + 2, new GuiElementBuilder(Items.BARRIER)
+        setSlot(9 * 2 + 2, QuestListScreen.setupQuestGuiElement(new GuiElementBuilder(Items.BOOK), quest));
+        setSlot(9 * 2 + 4, new GuiElementBuilder(Items.BARRIER)
                 .setName(Component.literal("Abort Quest"))
                 .setCallback((slot, clickType, mcClickType) -> {
                     new DialogGui(player, this,
                             Component.literal("Abort Quest?"),
-                            new GuiElementBuilder(Items.BOOK)
-                                    .setName(Component.literal(quest.name))
-                                    .setLore(formatDescription(quest.description)),
+                            QuestListScreen.setupQuestGuiElement(new GuiElementBuilder(Items.BOOK), quest),
                             (gui) -> {
                                 try {
                                     NQuestMod.INSTANCE.questDispatcher.stopQuests(player.getGameProfile().getId());
@@ -85,7 +84,7 @@ public class CurrentQuestScreen extends ItemListGui<Step> {
         int offset = page * pageSize;
         int realIndex = offset + index;
         if (progress.currentStepIndex > realIndex) {
-            icon = Items.GREEN_TERRACOTTA;
+            icon = Items.LIME_CONCRETE;
         } else if (progress.currentStepIndex == realIndex) {
             icon = Items.YELLOW_CONCRETE;
         } else {
