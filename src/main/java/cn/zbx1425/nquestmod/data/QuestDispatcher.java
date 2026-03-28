@@ -93,18 +93,20 @@ public class QuestDispatcher {
                     continue;
 
                 TscStatus.ClientState state = TscStatus.getClientState(player);
-                // Only count lines when train is actually moving
-                if (state != null && state.trainLine() != null && state.trainSpeedKmph() > 19) {
-                    progress.ensureInitialized();
-                    List<String> lines = progress.stepLinesRidden
+                if (state != null) {
+                    // Only count lines when train is actually moving
+                    if (state.trainLine() != null && state.trainSpeedKmph() > 19) {
+                        progress.ensureInitialized();
+                        List<String> lines = progress.stepLinesRidden
                             .computeIfAbsent(progress.currentStepIndex, k -> new ArrayList<>());
-                    String lineName = state.trainLine().name();
-                    if (!lines.contains(lineName)) {
-                        lines.add(lineName);
+                        String lineName = state.trainLine().name();
+                        if (!lines.contains(lineName)) {
+                            lines.add(lineName);
+                        }
                     }
-                }
 
-                tryAdvance(profile, progress, player, null);
+                    tryAdvance(profile, progress, player, null);
+                }
             }
         }
         return isAnyQuestGoingOn;
@@ -120,7 +122,10 @@ public class QuestDispatcher {
                     || progress.currentStepIndex >= progress.questSnapshot.steps.size()) {
                 continue;
             }
-            tryAdvance(profile, progress, player, triggerId);
+            TscStatus.ClientState state = TscStatus.getClientState(player);
+            if (state != null) {
+                tryAdvance(profile, progress, player, triggerId);
+            }
         }
     }
 
