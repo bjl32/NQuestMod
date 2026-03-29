@@ -44,7 +44,7 @@ public class CurrentQuestScreen extends ItemListGui<Step> {
 
         if (quest == null) return;
         setSlot(9 * 2 + 2, QuestListScreen.setupQuestGuiElement(new GuiElementBuilder(Items.BOOK), quest));
-        setSlot(9 * 2 + 4, new GuiElementBuilder(Items.BARRIER)
+        setSlot(9 * 2 + 3, new GuiElementBuilder(Items.BARRIER)
                 .setName(Component.literal("Abort Quest"))
                 .setCallback((slot, clickType, mcClickType) -> {
                     new DialogGui(player, this,

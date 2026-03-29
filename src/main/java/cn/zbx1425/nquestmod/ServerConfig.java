@@ -90,6 +90,7 @@ public class ServerConfig {
     public ConfigItem<String> websiteUrl;
 
     private Path path;
+    private long mTime;
 
     private static <T extends Enum<T>> T parseEnum(String name, Class<T> enumClass) {
         return Enum.valueOf(enumClass, name.toUpperCase());
@@ -97,6 +98,8 @@ public class ServerConfig {
 
     public void load(Path configPath) throws IOException {
         this.path = configPath;
+        this.mTime = Files.exists(configPath) ? Files.getLastModifiedTime(configPath).toMillis() : 0;
+
         JsonObject json = Files.exists(configPath)
             ? JsonParser.parseString(Files.readString(configPath)).getAsJsonObject()
             : new JsonObject();
@@ -111,6 +114,10 @@ public class ServerConfig {
         websiteUrl = new ConfigItem<>(json, "websiteUrl", "", value -> value);
 
         if (!Files.exists(configPath)) save(configPath);
+    }
+
+    public void reload() throws IOException {
+        load(this.path);
     }
 
     public void save(Path configPath) throws IOException {
@@ -129,6 +136,10 @@ public class ServerConfig {
     }
 
     public void save() throws IOException {
-        save(this.path);
+        long newMTime = Files.exists(path) ? Files.getLastModifiedTime(path).toMillis() : 0;
+        if (newMTime <= mTime) {
+            mTime = newMTime;
+            save(this.path);
+        }
     }
 }
