@@ -70,7 +70,7 @@ public class MainMenuScreen extends SimpleGui {
                 QuestListScreen.setupQuestGuiElement(new GuiElementBuilder(Items.BOOK), quest),
                 (gui) -> {
                     try {
-                        NQuestMod.INSTANCE.questDispatcher.startQuest(player, quest.id);
+                        NQuestMod.INSTANCE.questDispatcher.startQuestWithEligibilityCheck(player, quest.id);
                         gui.shouldCloseOnConfirm = true;
                     } catch (QuestException e) {
                         player.sendSystemMessage(e.getDisplayRepr(), false);

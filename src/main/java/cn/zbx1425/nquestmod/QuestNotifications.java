@@ -4,6 +4,7 @@ import cn.zbx1425.nquestmod.data.QuestDispatcher;
 import cn.zbx1425.nquestmod.data.IQuestCallbacks;
 import cn.zbx1425.nquestmod.data.criteria.Criterion;
 import cn.zbx1425.nquestmod.data.quest.*;
+import cn.zbx1425.nquestmod.data.ranking.RankingApiClient;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -19,6 +20,9 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.BossEvent;
 
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -169,6 +173,57 @@ public class QuestNotifications implements IQuestCallbacks {
         updateBossBarForPlayer(questEngine, player);
     }
 
+    @Override
+    public void onPlayerBanned(UUID playerUuid, List<RankingApiClient.ActiveBan> activeBans) {
+        server.execute(() -> {
+            ServerPlayer player = server.getPlayerList().getPlayer(playerUuid);
+            if (player == null) return;
+
+            player.sendSystemMessage(Component.literal("\u26D4 Cannot Start Quest \u26D4")
+                    .withStyle(Style.EMPTY.withColor(ChatFormatting.RED).withBold(true)), false);
+
+            RankingApiClient.ActiveBan ban = pickMostSevereBan(activeBans);
+            if (ban != null && "TEMP".equals(ban.banType)) {
+                player.sendSystemMessage(Component.literal("Your account is temporarily banned from Quest participation.")
+                        .withStyle(ChatFormatting.WHITE), false);
+                player.sendSystemMessage(Component.literal("  Reason: ").withStyle(ChatFormatting.GRAY)
+                        .append(Component.literal(ban.reason).withStyle(ChatFormatting.WHITE)), false);
+                if (ban.expiresAt != null) {
+                    String formatted = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'")
+                            .withZone(ZoneOffset.UTC)
+                            .format(Instant.ofEpochMilli(ban.expiresAt));
+                    player.sendSystemMessage(Component.literal("  Expires: ").withStyle(ChatFormatting.GRAY)
+                            .append(Component.literal(formatted).withStyle(ChatFormatting.AQUA)), false);
+                }
+            } else {
+                player.sendSystemMessage(Component.literal("Your account is permanently banned from Quest participation.")
+                        .withStyle(ChatFormatting.WHITE), false);
+                if (ban != null) {
+                    player.sendSystemMessage(Component.literal("  Reason: ").withStyle(ChatFormatting.GRAY)
+                            .append(Component.literal(ban.reason).withStyle(ChatFormatting.WHITE)), false);
+                }
+            }
+
+            sendSoundEffect(player, SoundEvents.ANVIL_LAND, 0.5f, 1.0f);
+        });
+    }
+
+    @Override
+    public void onCompletionRejectedBan(UUID playerUuid, Quest quest) {
+        server.execute(() -> {
+            ServerPlayer player = server.getPlayerList().getPlayer(playerUuid);
+            if (player == null) return;
+
+            player.sendSystemMessage(Component.literal("\u26D4 Quest Completion Rejected \u26D4")
+                    .withStyle(Style.EMPTY.withColor(ChatFormatting.RED).withBold(true)), false);
+            player.sendSystemMessage(Component.literal(quest.name).withStyle(ChatFormatting.YELLOW), false);
+            player.sendSystemMessage(Component.literal("Your account was banned during this quest. The completion will not be recorded.")
+                    .withStyle(ChatFormatting.WHITE), false);
+
+            sendSoundEffect(player, SoundEvents.ANVIL_LAND, 0.5f, 1.0f);
+        });
+    }
+
     private void updateBossBarForPlayer(QuestDispatcher questEngine, ServerPlayer player) {
         Optional<Consumer<CustomBossEvent>> bossBarMessage = getBossBarMessage(questEngine, player.getGameProfile().getId());
         ResourceLocation playerId = NQuestMod.id(player.getGameProfile().getId().toString());
@@ -212,6 +267,19 @@ public class QuestNotifications implements IQuestCallbacks {
                  event.setValue(progress.currentStepIndex);
             };
         });
+    }
+
+    private static RankingApiClient.ActiveBan pickMostSevereBan(List<RankingApiClient.ActiveBan> bans) {
+        if (bans == null || bans.isEmpty()) return null;
+        RankingApiClient.ActiveBan worst = null;
+        for (RankingApiClient.ActiveBan ban : bans) {
+            if ("PERM".equals(ban.banType)) return ban;
+            if (worst == null
+                    || (ban.expiresAt != null && (worst.expiresAt == null || ban.expiresAt > worst.expiresAt))) {
+                worst = ban;
+            }
+        }
+        return worst;
     }
 
     private String formatDuration(long millis) {

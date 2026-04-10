@@ -159,6 +159,46 @@ public class QuestDispatcher {
         callback.onQuestStarted(this, playerUuid, quest);
     }
 
+    /**
+     * Pre-validates synchronously (throws QuestException), then checks eligibility
+     * asynchronously via the ranking API before actually starting the quest.
+     * If the API is unavailable, fails open and starts the quest immediately.
+     */
+    public void startQuestWithEligibilityCheck(ServerPlayer player, String questId) throws QuestException {
+        UUID playerUuid = player.getGameProfile().getId();
+        PlayerProfile profile = playerProfiles.get(playerUuid);
+        if (profile == null)
+            throw new QuestException(QuestException.Type.PLAYER_NOT_FOUND);
+        Quest quest = quests.get(questId);
+        if (quest == null)
+            throw new QuestException(QuestException.Type.QUEST_NOT_FOUND);
+        if (!quest.isVisibleTo(playerUuid, isDebugMode(playerUuid))) {
+            throw new QuestException(QuestException.Type.QUEST_NOT_PUBLISHED);
+        }
+        if (profile.activeQuests.containsKey(questId))
+            throw new QuestException(QuestException.Type.QUEST_ALREADY_STARTED);
+        if (!profile.activeQuests.isEmpty())
+            throw new QuestException(QuestException.Type.QUEST_ONLY_ONE_AT_A_TIME);
+
+        if (rankingApi != null && rankingApi.isEnabled()) {
+            rankingApi.checkEligibility(playerUuid).whenComplete((response, error) -> {
+                player.getServer().execute(() -> {
+                    if (error == null && !response.eligible) {
+                        callback.onPlayerBanned(playerUuid, response.activeBans);
+                        return;
+                    }
+                    try {
+                        startQuest(player, questId);
+                    } catch (QuestException e) {
+                        player.sendSystemMessage(e.getDisplayRepr(), false);
+                    }
+                });
+            });
+        } else {
+            startQuest(player, questId);
+        }
+    }
+
     public void stopQuests(UUID playerUuid) throws QuestException {
         PlayerProfile profile = playerProfiles.get(playerUuid);
         if (profile == null)
@@ -215,6 +255,15 @@ public class QuestDispatcher {
             if (rankingApi != null && rankingApi.isEnabled()) {
                 rankingApi.submitCompletion(completionData).whenComplete((response, error) -> {
                     if (error != null) {
+                        RankingApiClient.ApiException apiEx = RankingApiClient.unwrapApiException(error);
+                        if (apiEx != null && "PLAYER_BANNED".equals(apiEx.errorCode)) {
+                            player.getServer().execute(() -> {
+                                profile.qpBalance -= quest.questPoints;
+                                profile.totalQuestCompletions -= 1;
+                                callback.onCompletionRejectedBan(profile.playerUuid, quest);
+                            });
+                            return;
+                        }
                         NQuestMod.LOGGER.error("Failed to submit completion to backend, writing to WAL", error);
                         NQuestMod.INSTANCE.pendingCompletions.enqueue(completionData);
                         return;

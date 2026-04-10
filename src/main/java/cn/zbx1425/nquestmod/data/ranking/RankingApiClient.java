@@ -127,6 +127,33 @@ public class RankingApiClient {
         });
     }
 
+    // --- Eligibility ---
+
+    public CompletableFuture<EligibilityResponse> checkEligibility(UUID playerUuid) {
+        return getJson("/players/" + playerUuid + "/eligibility").thenApply(json -> {
+            EligibilityResponse resp = new EligibilityResponse();
+            resp.eligible = json.has("eligible") && json.get("eligible").getAsBoolean();
+            resp.activeBans = new ArrayList<>();
+            if (json.has("activeBans") && json.get("activeBans").isJsonArray()) {
+                for (JsonElement el : json.getAsJsonArray("activeBans")) {
+                    JsonObject obj = el.getAsJsonObject();
+                    ActiveBan ban = new ActiveBan();
+                    ban.banType = obj.has("banType") ? obj.get("banType").getAsString() : "PERM";
+                    ban.reason = obj.has("reason") ? obj.get("reason").getAsString() : "";
+                    ban.expiresAt = obj.has("expiresAt") && !obj.get("expiresAt").isJsonNull()
+                            ? obj.get("expiresAt").getAsLong() : null;
+                    resp.activeBans.add(ban);
+                }
+            }
+            return resp;
+        }).exceptionally(e -> {
+            EligibilityResponse fallback = new EligibilityResponse();
+            fallback.eligible = true;
+            fallback.activeBans = List.of();
+            return fallback;
+        });
+    }
+
     // --- Player ---
 
     public CompletableFuture<PlayerStatsResponse> getPlayerProfile(UUID playerUuid) {
@@ -335,5 +362,16 @@ public class RankingApiClient {
         public UUID playerUuid;
         public int qpBalance;
         public int totalQuestCompletions;
+    }
+
+    public static class EligibilityResponse {
+        public boolean eligible;
+        public List<ActiveBan> activeBans;
+    }
+
+    public static class ActiveBan {
+        public String banType;
+        public String reason;
+        public Long expiresAt;
     }
 }
