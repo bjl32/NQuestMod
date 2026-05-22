@@ -93,20 +93,18 @@ public class QuestDispatcher {
                     continue;
 
                 TscStatus.ClientState state = TscStatus.getClientState(player);
-                if (state != null) {
-                    // Only count lines when train is actually moving
-                    if (state.trainLine() != null && state.trainSpeedKmph() > 19) {
-                        progress.ensureInitialized();
-                        List<String> lines = progress.stepLinesRidden
-                            .computeIfAbsent(progress.currentStepIndex, k -> new ArrayList<>());
-                        String lineName = state.trainLine().name();
-                        if (!lines.contains(lineName)) {
-                            lines.add(lineName);
-                        }
+                // Only count lines when train is actually moving.
+                if (state != null && state.trainLine() != null && state.trainSpeedKmph() > 19) {
+                    progress.ensureInitialized();
+                    List<String> lines = progress.stepLinesRidden
+                        .computeIfAbsent(progress.currentStepIndex, k -> new ArrayList<>());
+                    String lineName = state.trainLine().name();
+                    if (!lines.contains(lineName)) {
+                        lines.add(lineName);
                     }
-
-                    tryAdvance(profile, progress, player, null);
                 }
+
+                tryAdvance(profile, progress, player, null);
             }
         }
         return isAnyQuestGoingOn;
@@ -122,10 +120,7 @@ public class QuestDispatcher {
                     || progress.currentStepIndex >= progress.questSnapshot.steps.size()) {
                 continue;
             }
-            TscStatus.ClientState state = TscStatus.getClientState(player);
-            if (state != null) {
-                tryAdvance(profile, progress, player, triggerId);
-            }
+            tryAdvance(profile, progress, player, triggerId);
         }
     }
 
@@ -258,6 +253,7 @@ public class QuestDispatcher {
                         RankingApiClient.ApiException apiEx = RankingApiClient.unwrapApiException(error);
                         if (apiEx != null && "PLAYER_BANNED".equals(apiEx.errorCode)) {
                             player.getServer().execute(() -> {
+                                if (playerProfiles.get(profile.playerUuid) != profile) return;
                                 profile.qpBalance -= quest.questPoints;
                                 profile.totalQuestCompletions -= 1;
                                 callback.onCompletionRejectedBan(profile.playerUuid, quest);
@@ -268,12 +264,15 @@ public class QuestDispatcher {
                         NQuestMod.INSTANCE.pendingCompletions.enqueue(completionData);
                         return;
                     }
-                    profile.qpBalance = response.qpBalance;
-                    profile.totalQuestCompletions = response.totalQuestCompletions;
-                    profile.lastStatsSyncTime = System.currentTimeMillis();
-                    callback.onCompletionRanked(profile.playerUuid, quest, completionData,
-                            response.isPersonalBest, response.isWorldRecord, response.rank);
-                    NQuestMod.INSTANCE.pendingCompletions.replayIfNeeded(rankingApi);
+                    player.getServer().execute(() -> {
+                        if (playerProfiles.get(profile.playerUuid) != profile) return;
+                        profile.qpBalance = response.qpBalance;
+                        profile.totalQuestCompletions = response.totalQuestCompletions;
+                        profile.lastStatsSyncTime = System.currentTimeMillis();
+                        callback.onCompletionRanked(profile.playerUuid, quest, completionData,
+                                response.isPersonalBest, response.isWorldRecord, response.rank);
+                        NQuestMod.INSTANCE.pendingCompletions.replayIfNeeded(rankingApi);
+                    });
                 });
             }
         } else {

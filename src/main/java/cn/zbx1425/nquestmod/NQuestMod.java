@@ -85,7 +85,7 @@ public class NQuestMod implements ModInitializer {
                 if (rankingApi.isEnabled()) {
                     pendingCompletions.replayAll(rankingApi);
                 }
-            } catch (IOException ex) {
+            } catch (Exception ex) {
                 LOGGER.error("Failed to initialize NQuest", ex);
             }
         });
@@ -106,7 +106,7 @@ public class NQuestMod implements ModInitializer {
             }
             try {
                 SERVER_CONFIG.save();
-            } catch (IOException e) {
+            } catch (Exception e) {
                 LOGGER.error("Failed to save server config", e);
             }
         });
@@ -118,6 +118,11 @@ public class NQuestMod implements ModInitializer {
 
                 PlayerProfile profile = new PlayerProfile();
                 profile.playerUuid = playerUuid;
+                if (questDispatcher == null || profileStorage == null) {
+                    LOGGER.warn("NQuest is not initialized; skipping player profile load for {}", player.getGameProfile().getName());
+                    return;
+                }
+
                 profile.activeQuests = profileStorage.load(playerUuid);
                 for (var progress : profile.activeQuests.values()) {
                     progress.resumeCurrentStep();
@@ -132,9 +137,13 @@ public class NQuestMod implements ModInitializer {
                                     error);
                             return;
                         }
-                        profile.qpBalance = stats.qpBalance;
-                        profile.totalQuestCompletions = stats.totalQuestCompletions;
-                        profile.lastStatsSyncTime = System.currentTimeMillis();
+                        server.execute(() -> {
+                            PlayerProfile currentProfile = questDispatcher.playerProfiles.get(playerUuid);
+                            if (currentProfile != profile) return;
+                            profile.qpBalance = stats.qpBalance;
+                            profile.totalQuestCompletions = stats.totalQuestCompletions;
+                            profile.lastStatsSyncTime = System.currentTimeMillis();
+                        });
                     });
                 }
 
@@ -146,6 +155,11 @@ public class NQuestMod implements ModInitializer {
             server.execute(() -> {
                 ServerPlayer player = packetListener.getPlayer();
                 UUID playerUuid = player.getGameProfile().getId();
+                if (questDispatcher == null || profileStorage == null) {
+                    TscStatus.CLIENT_POSITIONS.remove(playerUuid);
+                    TscStatus.CLIENTS.remove(playerUuid);
+                    return;
+                }
                 if (questDispatcher.isDebugMode(playerUuid)) {
                     questDispatcher.toggleDebugMode(playerUuid);
                 }
@@ -162,7 +176,7 @@ public class NQuestMod implements ModInitializer {
         });
 
         ServerTickEvents.END_SERVER_TICK.register(server -> {
-            assert questDispatcher != null;
+            if (questDispatcher == null) return;
             if (server.getTickCount() % 20 == 5) {
                 TscStatus.requestUpdate(server);
             }

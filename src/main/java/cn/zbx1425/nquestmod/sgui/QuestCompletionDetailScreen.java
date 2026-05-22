@@ -30,8 +30,8 @@ public class QuestCompletionDetailScreen extends ItemListGui<Map.Entry<Integer, 
         this.completionData = completionData;
         this.quest = NQuestMod.INSTANCE.questDispatcher.quests.get(completionData.questId);
         setTitle(Component.literal("Step Details"));
-        init();
         rowContentStarts = 1;
+        init();
     }
 
     @Override

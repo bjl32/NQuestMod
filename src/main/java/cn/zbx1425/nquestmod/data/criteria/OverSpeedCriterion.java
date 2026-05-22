@@ -14,7 +14,8 @@ public class OverSpeedCriterion implements Criterion {
 
     @Override
     public boolean evaluate(ServerPlayer player, CriterionContext ctx) {
-        return TscStatus.getClientState(player).trainSpeedKmph() > maxSpeedKmph;
+        TscStatus.ClientState state = TscStatus.getClientState(player);
+        return state != null && state.trainSpeedKmph() > maxSpeedKmph;
     }
 
     @Override

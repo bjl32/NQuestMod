@@ -11,7 +11,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class PendingCompletions {
@@ -38,8 +40,10 @@ public class PendingCompletions {
         return Files.exists(walFile);
     }
 
-    public synchronized List<QuestCompletionData> drainAll() {
-        List<QuestCompletionData> results = new ArrayList<>();
+    private record PendingEntry(String line, QuestCompletionData data) {}
+
+    private synchronized List<PendingEntry> readAll() {
+        List<PendingEntry> results = new ArrayList<>();
         if (!Files.exists(walFile)) return results;
         try {
             List<String> lines = Files.readAllLines(walFile, StandardCharsets.UTF_8);
@@ -47,35 +51,76 @@ public class PendingCompletions {
                 String trimmed = line.trim();
                 if (trimmed.isEmpty()) continue;
                 try {
-                    results.add(gson.fromJson(trimmed, QuestCompletionData.class));
+                    results.add(new PendingEntry(trimmed, gson.fromJson(trimmed, QuestCompletionData.class)));
                 } catch (Exception e) {
                     NQuestMod.LOGGER.warn("Skipping malformed WAL entry: {}", trimmed, e);
                 }
             }
-            Files.deleteIfExists(walFile);
         } catch (IOException e) {
             NQuestMod.LOGGER.error("Failed to read pending completions from WAL", e);
         }
         return results;
     }
 
+    private synchronized void removeSucceededEntries(List<PendingEntry> attempted, List<PendingEntry> failed) {
+        List<String> succeededLines = new ArrayList<>();
+        for (PendingEntry entry : attempted) {
+            if (!failed.contains(entry)) {
+                succeededLines.add(entry.line());
+            }
+        }
+        if (succeededLines.isEmpty() || !Files.exists(walFile)) return;
+
+        try {
+            List<String> currentLines = Files.readAllLines(walFile, StandardCharsets.UTF_8);
+            List<String> remainingLines = new ArrayList<>();
+            for (String line : currentLines) {
+                int index = succeededLines.indexOf(line.trim());
+                if (index >= 0) {
+                    succeededLines.remove(index);
+                } else {
+                    remainingLines.add(line);
+                }
+            }
+
+            if (remainingLines.isEmpty()) {
+                Files.deleteIfExists(walFile);
+            } else {
+                Files.write(walFile, remainingLines, StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            }
+        } catch (IOException e) {
+            NQuestMod.LOGGER.error("Failed to update pending completions WAL after replay", e);
+        }
+    }
+
     public void replayAll(RankingApiClient rankingApi) {
         if (!replayInProgress.compareAndSet(false, true)) return;
-        try {
-            List<QuestCompletionData> pending = drainAll();
-            if (pending.isEmpty()) return;
-            NQuestMod.LOGGER.info("Replaying {} pending completions from WAL", pending.size());
-            for (QuestCompletionData data : pending) {
-                rankingApi.submitCompletion(data).whenComplete((response, error) -> {
+        List<PendingEntry> pending = readAll();
+        if (pending.isEmpty()) {
+            replayInProgress.set(false);
+            return;
+        }
+
+        NQuestMod.LOGGER.info("Replaying {} pending completions from WAL", pending.size());
+        List<PendingEntry> failed = Collections.synchronizedList(new ArrayList<>());
+        List<CompletableFuture<Void>> submissions = new ArrayList<>();
+        for (PendingEntry entry : pending) {
+            submissions.add(rankingApi.submitCompletion(entry.data()).<Void>handle((response, error) -> {
+                    QuestCompletionData data = entry.data();
                     if (error != null) {
                         NQuestMod.LOGGER.error("Failed to replay pending completion for quest {}, re-enqueuing", data.questId, error);
-                        enqueue(data);
+                        failed.add(entry);
                     }
-                });
-            }
-        } finally {
-            replayInProgress.set(false);
+                    return null;
+                })
+            );
         }
+
+        CompletableFuture.allOf(submissions.toArray(CompletableFuture[]::new)).whenComplete((unused, error) -> {
+            removeSucceededEntries(pending, failed);
+            replayInProgress.set(false);
+        });
     }
 
     public void replayIfNeeded(RankingApiClient rankingApi) {

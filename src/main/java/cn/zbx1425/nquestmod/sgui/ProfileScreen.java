@@ -37,10 +37,12 @@ public class ProfileScreen extends ParentedGui {
                     NQuestMod.LOGGER.warn("Failed to refresh player stats for {}", player.getGameProfile().getName(), error);
                     return;
                 }
-                profile.qpBalance = stats.qpBalance;
-                profile.totalQuestCompletions = stats.totalQuestCompletions;
-                profile.lastStatsSyncTime = System.currentTimeMillis();
                 player.getServer().execute(() -> {
+                    PlayerProfile currentProfile = NQuestMod.INSTANCE.questDispatcher.playerProfiles.get(player.getGameProfile().getId());
+                    if (currentProfile != profile) return;
+                    profile.qpBalance = stats.qpBalance;
+                    profile.totalQuestCompletions = stats.totalQuestCompletions;
+                    profile.lastStatsSyncTime = System.currentTimeMillis();
                     if (isOpen()) renderProfile(profile);
                 });
             });
