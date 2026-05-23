@@ -7,27 +7,25 @@ import cn.zbx1425.nquestmod.data.quest.*;
 import cn.zbx1425.nquestmod.data.ranking.RankingApiClient;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.protocol.game.ClientboundSoundPacket;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.bossevents.CustomBossEvent;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.BossEvent;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 
 public class QuestNotifications implements IQuestCallbacks {
 
@@ -40,7 +38,8 @@ public class QuestNotifications implements IQuestCallbacks {
     public void onPlayerJoin(QuestDispatcher questEngine, UUID playerUuid) {
         ServerPlayer player = server.getPlayerList().getPlayer(playerUuid);
         if (player == null) return;
-        updateBossBarForPlayer(questEngine, player);
+        removeLegacyBossBar(player);
+        updateHudForPlayer(questEngine, player);
     }
 
     @Override
@@ -67,7 +66,8 @@ public class QuestNotifications implements IQuestCallbacks {
             }
         }
         sendSoundEffect(player, SoundEvents.AMETHYST_BLOCK_RESONATE, 2.0f, 1.0f);
-        updateBossBarForPlayer(questEngine, player);
+        removeLegacyBossBar(player);
+        updateHudForPlayer(questEngine, player, true);
     }
 
     @Override
@@ -98,7 +98,8 @@ public class QuestNotifications implements IQuestCallbacks {
             }
         }
         sendSoundEffect(player, SoundEvents.AMETHYST_BLOCK_RESONATE, 2.0f, 1.0f);
-        updateBossBarForPlayer(questEngine, player);
+        removeLegacyBossBar(player);
+        updateHudForPlayer(questEngine, player);
     }
 
     @Override
@@ -121,7 +122,8 @@ public class QuestNotifications implements IQuestCallbacks {
         }
 
         sendSoundEffect(player, SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f);
-        updateBossBarForPlayer(questEngine, player);
+        removeLegacyBossBar(player);
+        clearHud(player);
     }
 
     @Override
@@ -156,7 +158,8 @@ public class QuestNotifications implements IQuestCallbacks {
                 .withStyle(Style.EMPTY.withColor(ChatFormatting.RED).withBold(true)), false);
         player.sendSystemMessage(Component.literal(quest.name).withStyle(ChatFormatting.YELLOW), false);
         sendSoundEffect(player, SoundEvents.ANVIL_LAND, 0.5f, 1.0f);
-        updateBossBarForPlayer(questEngine, player);
+        removeLegacyBossBar(player);
+        clearHud(player);
     }
 
     @Override
@@ -170,7 +173,8 @@ public class QuestNotifications implements IQuestCallbacks {
         player.sendSystemMessage(Component.literal("  Do not: ").withStyle(ChatFormatting.WHITE)
             .append(reason.copy().withStyle(ChatFormatting.RED)), false);
         sendSoundEffect(player, SoundEvents.ANVIL_LAND, 0.5f, 1.0f);
-        updateBossBarForPlayer(questEngine, player);
+        removeLegacyBossBar(player);
+        clearHud(player);
     }
 
     @Override
@@ -224,49 +228,64 @@ public class QuestNotifications implements IQuestCallbacks {
         });
     }
 
-    private void updateBossBarForPlayer(QuestDispatcher questEngine, ServerPlayer player) {
-        Optional<Consumer<CustomBossEvent>> bossBarMessage = getBossBarMessage(questEngine, player.getGameProfile().getId());
-        ResourceLocation playerId = NQuestMod.id(player.getGameProfile().getId().toString());
-        CustomBossEvent event = player.getServer().getCustomBossEvents().get(playerId);
-        if (bossBarMessage.isPresent()) {
-            if (event == null) {
-                event = player.getServer().getCustomBossEvents().create(playerId, Component.empty());
-                event.setPlayers(List.of(player));
-                event.setColor(BossEvent.BossBarColor.BLUE);
-                event.setOverlay(BossEvent.BossBarOverlay.PROGRESS);
-            }
-            bossBarMessage.get().accept(event);
-        } else {
-            if (event != null) {
-                event.removeAllPlayers();
-                player.getServer().getCustomBossEvents().remove(event);
-            }
-        }
+    private void updateHudForPlayer(QuestDispatcher questEngine, ServerPlayer player) {
+        updateHudForPlayer(questEngine, player, false);
     }
 
-    private Optional<Consumer<CustomBossEvent>> getBossBarMessage(QuestDispatcher questEngine, UUID playerUuid) {
-        PlayerProfile profile = questEngine.getPlayerProfile(playerUuid);
+    private void updateHudForPlayer(QuestDispatcher questEngine, ServerPlayer player, boolean resetCurrentSegment) {
+        PlayerProfile profile = questEngine.getPlayerProfile(player.getGameProfile().getId());
         if (profile == null || profile.activeQuests.isEmpty()) {
-            return Optional.empty();
+            clearHud(player);
+            return;
         }
 
-        boolean debug = questEngine.isDebugMode(playerUuid);
-        return profile.activeQuests.values().stream().findFirst().map(progress -> {
-            Quest quest = progress.questSnapshot;
-            if (quest == null || progress.currentStepIndex >= quest.steps.size()) {
-                return null;
+        QuestProgress progress = profile.activeQuests.values().stream().findFirst().orElse(null);
+        if (progress == null || progress.questSnapshot == null
+                || progress.currentStepIndex >= progress.questSnapshot.steps.size()) {
+            clearHud(player);
+            return;
+        }
+
+        Quest quest = progress.questSnapshot;
+        Step currentStep = quest.steps.get(progress.currentStepIndex);
+        long now = System.currentTimeMillis();
+        long segmentElapsedMillis = resetCurrentSegment ? 0 : Math.max(0, progress.getCurrentStepDuration(now));
+        long totalElapsedMillis = segmentElapsedMillis;
+        for (var entry : progress.previousSessionsStepDurationsMillis.entrySet()) {
+            if (entry.getKey() != progress.currentStepIndex) {
+                totalElapsedMillis += Math.max(0, entry.getValue());
             }
-            Step currentStep = quest.steps.get(progress.currentStepIndex);
-            return (event) -> {
-                 Component name = debug
-                         ? Component.literal("[DEBUG] ").withStyle(ChatFormatting.DARK_GRAY)
-                                 .append(currentStep.criteria.getDisplayRepr())
-                         : currentStep.criteria.getDisplayRepr();
-                 event.setName(name);
-                 event.setMax(quest.steps.size());
-                 event.setValue(progress.currentStepIndex);
-            };
-        });
+        }
+
+        QuestHudNetworking.HudState state = new QuestHudNetworking.HudState(
+                true,
+                currentStep.getDisplayRepr(),
+                questEngine.isDebugMode(profile.playerUuid),
+                progress.currentStepIndex + 1,
+                quest.steps.size(),
+                totalElapsedMillis,
+                segmentElapsedMillis
+        );
+        sendHudState(player, state);
+    }
+
+    private void clearHud(ServerPlayer player) {
+        sendHudState(player, QuestHudNetworking.HudState.inactive());
+    }
+
+    private void sendHudState(ServerPlayer player, QuestHudNetworking.HudState state) {
+        if (!ServerPlayNetworking.canSend(player, QuestHudNetworking.QUEST_HUD)) return;
+        FriendlyByteBuf buf = PacketByteBufs.create();
+        QuestHudNetworking.write(buf, state);
+        ServerPlayNetworking.send(player, QuestHudNetworking.QUEST_HUD, buf);
+    }
+
+    private void removeLegacyBossBar(ServerPlayer player) {
+        var event = player.getServer().getCustomBossEvents().get(NQuestMod.id(player.getGameProfile().getId().toString()));
+        if (event != null) {
+            event.removeAllPlayers();
+            player.getServer().getCustomBossEvents().remove(event);
+        }
     }
 
     private static RankingApiClient.ActiveBan pickMostSevereBan(List<RankingApiClient.ActiveBan> bans) {

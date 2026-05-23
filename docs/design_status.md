@@ -1,6 +1,6 @@
 # NQuest 项目现状文档
 
-> 版本 0.5.0 · Fabric 1.20.4 · 最后更新 2026-02-21
+> 版本 0.10.0 · Fabric 1.20.4 · 最后更新 2026-05-23
 
 ---
 
@@ -59,10 +59,12 @@ GuiStarter.openEntry()
 | | 任务完成 | ⭐ Quest Complete! ⭐ + 用时 + QP 奖励 |
 | | 任务放弃 | ✘ Quest Aborted ✘ |
 | | 任务失败 | ✘ Quest Failed ✘ + 失败原因 |
-| **Boss Bar** | 任务进行中 | 显示当前步骤的 `displayRepr`，进度条 = `currentStep / totalSteps`，蓝色 PROGRESS 样式 |
+| **客户端 HUD** | 任务进行中 | 左上角显示当前步骤 `displayRepr`、`Step X/Y`、`Total time: H:MM:SS`、`Segment time: H:MM:SS` |
 | **音效** | 步骤/任务完成 | `amethyst_block_resonate`（音量 2.0） |
 | | 任务完成 | `ui_toast_challenge_complete` |
 | | 放弃/失败 | `anvil_land`（音量 0.5） |
+
+> NQuestMod 现在需要同时安装在服务端和客户端。客户端通过 `nquestmod:quest_hud` 网络包接收任务 HUD 状态；未安装客户端模组的玩家会在加入时被服务端拒绝。
 
 ### 2.5 任务列表展示
 
@@ -105,7 +107,9 @@ GuiStarter.openEntry()
 cn.zbx1425.nquestmod
 ├── NQuestMod.java          # 模组入口，生命周期管理
 ├── Commands.java           # Brigadier 命令注册（/nquest 及子命令）
-├── QuestNotifications.java # IQuestCallbacks 实现，聊天/Boss Bar/音效通知
+├── QuestNotifications.java # IQuestCallbacks 实现，聊天/HUD 同步/音效通知
+├── NQuestModClient.java    # 客户端入口，HUD 渲染与客户端配置
+├── QuestHudNetworking.java # 服务端到客户端的任务 HUD 状态包
 ├── CommandSigner.java      # HMAC-MD5 时间戳签名（保护远程 set 命令）
 │
 ├── data/                   # 核心数据与逻辑

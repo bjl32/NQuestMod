@@ -12,6 +12,8 @@ import cn.zbx1425.nquestmod.interop.GenerationStatus;
 import cn.zbx1425.nquestmod.interop.TscStatus;
 import com.google.gson.JsonPrimitive;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.fabricmc.api.ModInitializer;
@@ -116,12 +118,18 @@ public class NQuestMod implements ModInitializer {
                 ServerPlayer player = packetListener.getPlayer();
                 UUID playerUuid = player.getGameProfile().getId();
 
-                PlayerProfile profile = new PlayerProfile();
-                profile.playerUuid = playerUuid;
                 if (questDispatcher == null || profileStorage == null) {
                     LOGGER.warn("NQuest is not initialized; skipping player profile load for {}", player.getGameProfile().getName());
                     return;
                 }
+                if (!ServerPlayNetworking.canSend(player, QuestHudNetworking.QUEST_HUD)) {
+                    player.connection.disconnect(Component.literal(
+                            "NQuestMod client is required to join this server. Please install NQuestMod on your client."));
+                    return;
+                }
+
+                PlayerProfile profile = new PlayerProfile();
+                profile.playerUuid = playerUuid;
 
                 profile.activeQuests = profileStorage.load(playerUuid);
                 for (var progress : profile.activeQuests.values()) {
