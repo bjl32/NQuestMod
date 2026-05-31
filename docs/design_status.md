@@ -1,6 +1,6 @@
 # NQuest 项目现状文档
 
-> 版本 0.10.0 · Fabric 1.20.4 · 最后更新 2026-05-23
+> 版本 0.10.0 · Fabric 1.20.4 · 最后更新 2026-05-31
 
 ---
 
@@ -85,16 +85,16 @@ GuiStarter.openEntry()
 
 | 类型 | 数据来源 | 条目展示 |
 |------|---------|---------|
-| Total QP | `getOverallQPLeaderboard` | 玩家头像 + `#排名 玩家名` + `xxx QP` |
-| Total Completions | `getQuestCompletionsLeaderboard` | 同上 + `xxx completions` |
-| Speedruns | `getQuestTimeLeaderboard`（先选任务） | 玩家头像 + 排名 + `H:MM:SS` + 可点击查看详情 |
+| Total QP | `RankingApiClient.getQPLeaderboard` | 玩家头像 + `#排名 玩家名` + `xxx QP` |
+| Total Completions | `RankingApiClient.getCompletionsLeaderboard` | 同上 + `xxx completions` |
+| Speedruns | `RankingApiClient.getSpeedrunLeaderboard`（先选任务） | 玩家头像 + 排名 + `H:MM:SS` + 可点击查看详情 |
 
 - 支持全时段 / 月度切换（二级标签）
 
 ### 2.8 个人资料 & 历史
 
-- **ProfileScreen**：玩家头像、总 QP、总完成数、进入历史记录入口
-- **QuestHistoryScreen**：分页列出历史完成记录，每条显示任务名、完成时间、用时、获得 QP
+- **ProfileScreen**：玩家头像、总 QP、总完成数（来自 `RankingApiClient.getPlayerProfile`）、进入历史记录入口
+- **QuestHistoryScreen**：通过 `RankingApiClient.getPlayerHistory` 分页列出历史完成记录，每条显示任务名、完成时间、用时、获得 QP
 - **QuestCompletionDetailScreen**：逐步展示每步耗时，头部显示任务名、完成者、QP、总用时
 
 ---
@@ -110,11 +110,15 @@ cn.zbx1425.nquestmod
 ├── QuestNotifications.java # IQuestCallbacks 实现，聊天/HUD 同步/音效通知
 ├── NQuestModClient.java    # 客户端入口，HUD 渲染与客户端配置
 ├── QuestHudNetworking.java # 服务端到客户端的任务 HUD 状态包
+├── QuestEventLogger.java   # 任务事件审计日志：按天写 Start/Progress/Fail/Finish/Abort
+├── ServerConfig.java       # 服务端配置：Web API、同步、事件日志目录/时区/保留天数
 ├── CommandSigner.java      # HMAC-MD5 时间戳签名（保护远程 set 命令）
 │
 ├── data/                   # 核心数据与逻辑
 │   ├── QuestDispatcher.java      # 任务调度核心：开始/停止/推进/失败判定
 │   ├── QuestPersistence.java     # JSON 持久化（任务定义、分类、签名密钥）
+│   ├── QuestProgressPersistence.java # 活跃任务进度 JSON 持久化（quest_sessions）
+│   ├── QuestSyncClient.java      # 远端任务/分类同步，主线程应用新 bundle
 │   ├── NQuestGson.java           # 统一 Gson 配置（注册 CriteriaRegistry 工厂）
 │   ├── QuestException.java       # 错误类型枚举 + Brigadier 异常转换
 │   ├── IQuestCallbacks.java      # 任务生命周期回调接口
@@ -132,7 +136,7 @@ cn.zbx1425.nquestmod
 │   │   └── QuestCompletionData   # 完成记录快照
 │   │
 │   ├── criteria/           # 条件系统
-│   │   ├── Criterion.java        # 接口：evaluate(player, ctx) / getDisplayRepr / expand / propagateManualTrigger(id, ctx)
+│   │   ├── Criterion.java        # 接口：evaluate / evaluateFailureTypes / getDisplayRepr / expand / propagateManualTrigger
 │   │   ├── CriterionContext.java # 求值上下文 record：封装 StepState + 当前树路径，child() 派生子节点
 │   │   ├── CriteriaRegistry.java # 注册所有 Criterion 子类到 Gson RuntimeTypeAdapterFactory
 │   │   ├── 逻辑组合: AndCriterion, OrCriterion, NotCriterion
@@ -144,16 +148,15 @@ cn.zbx1425.nquestmod
 │   │   │
 │   │   └── mtr/            # MTR 专用条件
 │   │       ├── MtrNameUtil.java          # 站名/线名匹配（支持 name: 和 id: 前缀）
-│   │       ├── VisitStationCriterion     # 在指定车站区域内
-│   │       ├── RideLineCriterion         # 正在乘坐指定线路
-│   │       ├── RideToStationCriterion    # 乘车到达指定车站
-│   │       └── RideLineToStationCriterion# 乘坐指定线路到达指定车站
+│   │       ├── VisitStationCriterion / InStationAreaCriterion / StationStopCriterion
+│   │       ├── RideLineCriterion / RideFromStationCriterion / RideToStationCriterion
+│   │       └── RideLineFromStationCriterion / RideLineToStationCriterion
 │   │
-│   └── ranking/            # 排行与持久化
-│       ├── QuestUserDatabase.java  # SQLite：玩家档案 CRUD + 排行榜查询 + 完成记录
+│   └── ranking/            # 排行 API 与待提交完成记录 WAL
+│       ├── RankingApiClient.java   # Web API：排行、历史、资格检查、完成提交
+│       ├── PendingCompletions.java # 本地 JSONL WAL，失败提交可重放
 │       ├── PlayerQPEntry.java      # QP 排行条目
-│       ├── PlayerCompletionsEntry  # 完成数排行条目
-│       └── QuestTimeEntry.java     # 速通排行条目
+│       └── PlayerCompletionsEntry  # 完成数排行条目
 │
 ├── interop/                # MTR 桥接层
 │   ├── TscStatus.java            # 共享状态：玩家位置 → MTR 车站/线路映射
@@ -165,10 +168,11 @@ cn.zbx1425.nquestmod
 │   ├── ProfileScreen, QuestHistoryScreen
 │   ├── ParentedGui, ItemListGui, TabbedItemListGui, DialogGui
 │
-└── mixin/                  # Mixin 注入
+└── mixin/                  # Mixin 注入与 accessor
     ├── SimulatorMixin.java       # 注入 MTR Simulator.tick()，同步站点/线路数据到 TscStatus
     ├── ServerPlayerMixin.java    # 注入 teleportTo()，标记传送事件到 GenerationStatus
-    └── ScoreboardCommandMixin.java # 注入 setScore()，兼容旧版 scoreboard 触发
+    ├── ScoreboardCommandMixin.java # 注入 setScore()，兼容旧版 scoreboard 触发
+    └── SidingAccessor / VehicleAccessor / VehicleSchemaAccessor # 读取 MTR 内部车辆/线路状态
 ```
 
 ### 3.2 数据流：任务进度推进
@@ -190,17 +194,18 @@ tryAdvance(profile, progress, player, triggerId=null)
     ├─ 2. 构建 CriterionContext（state=StepState, path=""），将状态与定义解耦
     │
     ├─ 3. 检查失败条件 → step.evaluateFailure(player, failureCtx, defaultCriteria, defaultFailCtx)
-    │     → 若失败：移除活跃任务，回调 onQuestFailed
+    │     → 若失败：移除活跃任务，保存进度，回调 onQuestFailed
+    │     → QuestNotifications 发送聊天/HUD 清理/音效，并写入 Fail 事件日志
     │
     └─ 4. 检查完成条件 → step.evaluate(player, criteriaCtx)
           → 若满足：advanceQuestStep()
-              ├─ currentStepIndex++
-              ├─ 重置 StepState（criteriaState / failureCriteriaState / defaultFailureCriteriaState）
-              ├─ 清除 expandedCurrentStep 缓存（下步重新展开）
-              ├─ 回调 onStepCompleted
-              ├─ 若所有步骤完成 → 生成 QuestCompletionData，更新 profile 统计，
-              │                    回调 onQuestCompleted，写入 SQLite
-              └─ 否则 → 记录下一步开始时间
+              ├─ 结算当前步骤耗时并 currentStepIndex++
+              ├─ 若还有下一步 → 重置 StepState，保存进度，回调 onStepCompleted
+              │                  → 写入 Progress X/Y（HUD 当前 Step X/Y）
+              └─ 若所有步骤完成 → 移除活跃任务，生成 QuestCompletionData，
+                                   更新内存统计，写入 PendingCompletions WAL，
+                                   保存进度，回调 onQuestCompleted → 写入 Finish，
+                                   后台提交 RankingApiClient（Idempotency-Key = clientCompletionId）
 ```
 
 ### 3.3 数据流：MTR 状态同步
@@ -225,7 +230,7 @@ MTR Criterion 在 evaluate(player, ctx) 中读取:
 ### 3.4 数据流：手动触发
 
 ```
-/nquest trigger <player> <trigger_id>  (权限等级 2)
+/nquest quest trigger <participant> <trigger_id>  (权限等级 2)
     │
     ▼
 QuestDispatcher.triggerManualCriterion(uuid, triggerId, player)
@@ -248,31 +253,41 @@ tryAdvance(... triggerId)
 |------|---------|------|------|
 | 任务定义 | `<world>/nquest/quests/<id>.json` | JSON (NQuestGson + RuntimeTypeAdapterFactory) | set 命令时立即保存；启动时加载全部 |
 | 分类定义 | `<world>/nquest/categories.json` | JSON | set 命令时保存；服务器关闭时保存；启动时加载 |
-| 签名密钥 | `<world>/nquest/command_signer.json` | JSON（UUID） | 首次启动自动生成 |
-| 玩家档案 | `<world>/nquest/user.db` (SQLite) | 表 `player_profiles`（json 列含 QuestProgress.questSnapshot + StepState） | 玩家退出时保存；加入时加载 |
-| 完成记录 | 同上 | 表 `quest_completions`（含 stepDetails JSON） | 任务完成时插入 |
+| 服务端配置 | `<server>/config/nquest.json` | JSON（含 `commandSigningKey`、Web API、事件日志配置） | 启动时加载；服务器关闭时保存 |
+| 活跃任务进度 | `<world>/nquest/quest_sessions/<uuid>.json` | JSON（`QuestProgress.questSnapshot` + StepState + 计时/线路记录） | 开始、推进、失败/完成/放弃、退出、关闭时保存；空任务时删除 |
+| 待提交完成记录 | `<world>/nquest/pending_completions.jsonl` | 每行一个 `QuestCompletionData` JSON；`clientCompletionId` 去重 | API 开启时任务完成先入 WAL；提交成功后移除；启动/提交后重放 |
+| 历史/排行记录 | 远端 `webBackendUrl` | JSON API | `RankingApiClient` 查询排行、玩家历史、资格检查并提交完成记录 |
 | 任务事件日志 | `<server>/logs/nquest/quest_events-YYYY-MM-DD.log`（可通过 `eventLogDir` 配置） | UTF-8 文本，每行 `Event player unixTimestamp zoneId questId [detail]` | 任务开始、进度、失败、完成、放弃时追加；默认保留 7 天 |
 
 所有 Gson 序列化/反序列化统一使用 `NQuestGson.INSTANCE`（注册了 `CriteriaRegistry` 工厂），确保 `QuestProgress.questSnapshot` 中的多态 Criterion 树可正确序列化。
 
-任务事件日志配置项：`eventLogDir` 默认 `logs/nquest`（相对服务器根目录），`eventLogTimezone` 默认 `UTC`，`eventLogRetentionDays` 默认 `7`（`0` 表示不自动删除）。
+任务事件日志配置项：`eventLogDir` 默认 `logs/nquest`（相对服务器根目录，绝对路径也可用），`eventLogTimezone` 默认 `UTC`，`eventLogRetentionDays` 默认 `7`（`0` 表示不自动删除）。日志文件日期按配置时区计算，行内时间戳始终是 Unix epoch seconds；旧版 `<world>/nquest/quest_events.log` 不再读取或迁移。
+
+任务事件日志语义：
+- `Start player unixTimestamp zoneId questId`：仅任务开始时写入，不立即写 `Progress 1/Y`
+- `Progress player unixTimestamp zoneId questId X/Y`：步骤完成后、HUD 当前步骤变为 `Step X/Y` 时写入；最终步骤不写 `Progress Y/Y`
+- `Fail player unixTimestamp zoneId questId LeafCriterionType[+LeafCriterionType]`：失败时写入匹配的失败条件叶子类型，按树顺序用 `+` 连接
+- `Finish player unixTimestamp zoneId questId`：任务完成时写入
+- `Abort player unixTimestamp zoneId questId`：显式停止、任务删除、reload/sync 删除等非失败/非完成结束时写入
 
 ### 3.6 命令体系
 
 | 命令 | 权限 | 功能 |
 |------|------|------|
 | `/nquest` | 0 | 打开 GUI |
-| `/nquest start <player> <quest_id>` | 2 | 为指定玩家开始任务 |
-| `/nquest stop [player]` | 0/2 | 放弃任务（无参为自己，指定玩家需权限2） |
-| `/nquest trigger <player> <trigger_id>` | 2 | 手动触发条件 |
-| `/nquest quests set <sign> <json>` | 2 | 设置任务定义（需签名） |
-| `/nquest quests get <quest_id>` | 3 | 获取任务 JSON |
-| `/nquest quests remove <quest_id>` | 3 | 删除任务定义 |
-| `/nquest categories set <sign> <json>` | 2 | 设置分类定义（需签名） |
-| `/nquest categories get` | 3 | 获取分类 JSON |
-| `/nquest sign` | 3 | 生成 5 分钟有效的 HMAC-MD5 时间戳签名 |
+| `/nquest quest start <participant> <quest_id>` | 2 | 为指定玩家开始任务 |
+| `/nquest quest stop [participant]` | 2 | 放弃任务（无参为自己，指定玩家需权限 2） |
+| `/nquest quest trigger <participant> <trigger_id>` | 2 | 手动触发条件 |
+| `/nquest config quests set <sign> <json>` | 2 | 设置任务定义（需签名） |
+| `/nquest config quests get <quest_id>` | 3 | 获取任务 JSON |
+| `/nquest config quests remove <quest_id>` | 3 | 删除任务定义；若有玩家正在进行该任务，会按 Abort 结束 |
+| `/nquest config categories set <sign> <json>` | 2 | 设置分类定义（需签名） |
+| `/nquest config categories get` | 3 | 获取分类 JSON |
+| `/nquest config sign` | 3 | 生成 5 分钟有效的 HMAC-MD5 时间戳签名 |
+| `/nquest config reload` | 3 | 重载服务端配置 |
+| `/nquest debugMode [participant]` | 2 | 切换调试模式（无参为自己，指定玩家需权限 2） |
 
-签名机制：`quests set` 和 `categories set` 需要通过 `/nquest sign` 获取签名，防止未授权修改。
+签名机制：`config quests set` 和 `config categories set` 需要通过 `/nquest config sign` 获取签名，防止未授权修改。
 
 ### 3.7 条件系统详解
 
@@ -286,6 +301,8 @@ tryAdvance(... triggerId)
 
 **接口 `Criterion`：**
 - `evaluate(ServerPlayer, CriterionContext)` → 是否满足（替代原 `isFulfilled`）
+- `evaluateFailureTypes(ServerPlayer, CriterionContext, List<String>)` → 失败判定并收集匹配叶子类型，用于事件日志
+- `collectLeafTypes(List<String>)` → 收集条件树叶子类型名，组合条件用于失败原因展开
 - `getDisplayRepr()` → 用于 GUI/聊天的显示文本
 - `expand()` → 展开语法糖（如 RideLineToStation → Descriptor(RisingEdge(VisitStation, RideLine))），默认返回自身
 - `propagateManualTrigger(String, CriterionContext)` → 传播手动触发信号
@@ -310,14 +327,19 @@ tryAdvance(... triggerId)
 | `OverSpeedCriterion` | 玩家速度超过阈值（通过 ctx 保存 lastX/Y/Z 和 lastTick） | 是 |
 | `TeleportDetectCriterion` | 玩家发生传送 | 否（读 GenerationStatus） |
 | `VisitStationCriterion` | 玩家在匹配的 MTR 车站区域内 | 否 |
+| `InStationAreaCriterion` | 玩家在指定 MTR 车站区域内 | 否 |
+| `StationStopCriterion` | 玩家所在列车停靠在匹配车站 | 否 |
 | `RideLineCriterion` | 玩家正在乘坐匹配的 MTR 线路 | 否 |
+| `RideFromStationCriterion` | **语法糖**：从指定车站乘车离开 | — |
 | `RideToStationCriterion` | **语法糖**：expand() → Descriptor(RisingEdge(VisitStation, RideLine(""))) | — |
+| `RideLineFromStationCriterion` | **语法糖**：乘坐指定线路从指定车站离开 | — |
 | `RideLineToStationCriterion` | **语法糖**：expand() → Descriptor(RisingEdge(VisitStation, RideLine)) | — |
 | `AndCriterion` | 全部子条件满足 | 取决于子条件 |
 | `OrCriterion` | 任一子条件满足 | 取决于子条件 |
 | `NotCriterion` | 取反 | 取决于子条件 |
 | `LatchingCriterion` | 一旦满足则锁定（ctx.setBoolean("fulfilled", true)） | 是 |
 | `RisingEdgeAndConditionCriterion` | trigger 从 false→true 的瞬间 condition 也为 true | 是 |
+| `SequenceCriterion` | 子条件按顺序逐个满足（ctx.setInt("step", ...)） | 是 |
 | `Descriptor` | 为条件添加自定义描述文本 | 取决于子条件 |
 
 ### 3.8 任务模型
@@ -339,8 +361,11 @@ tryAdvance(... triggerId)
 
 **QuestProgress 结构：**
 - `questId` — 任务 ID
+- `attemptId` — 本次尝试 UUID，用作完成提交的幂等来源
 - `questSnapshot` (Quest) — 开始任务时冻结的**原始未展开** Quest 定义
 - `currentStepIndex` — 当前步骤索引
+- `questStartTime`, `currentStepSessionStartTime`, `previousSessionsStepDurationsMillis` — 总耗时与分段计时，断线期间不计入当前步骤
+- `stepLinesRidden` — 每步乘坐过的线路名，用于完成详情
 - `criteriaState`, `failureCriteriaState`, `defaultFailureCriteriaState` (StepState) — 当前步骤的可变状态
 - `expandedCurrentStep`, `expandedDefaultCriteria` (transient) — 运行时从 questSnapshot 展开的缓存
 
@@ -354,16 +379,17 @@ tryAdvance(... triggerId)
 | Fabric API | 0.97.3+1.20.4 | 事件/命令/网络 API |
 | Minecraft Transit Railway (MTR) | 4.0.0 | 列车/车站/线路系统 |
 | SGUI (Polymer) | 1.4.2+1.20.4 | 服务端 GUI 框架 |
-| SQLite JDBC | 3.50.3.0 | 玩家数据持久化 |
 | Gson | Minecraft 内置 | JSON 序列化 |
+| Java HttpClient | JDK 17 | Web API 同步、排行、历史、完成提交 |
 
 ### 3.10 Mixin 注入点
 
-| Mixin | 目标 | 注入点 | 功能 |
-|-------|------|--------|------|
+| Mixin / Accessor | 目标 | 注入点 | 功能 |
+|------------------|------|--------|------|
 | `SimulatorMixin` | `org.mtr.core.simulation.Simulator` | `tick()` RETURN | 将 MTR 模拟器中的站点/线路/乘客数据同步到 `TscStatus` |
 | `ServerPlayerMixin` | `net.minecraft.server.level.ServerPlayer` | `teleportTo` 两个重载 | 标记传送事件到 `GenerationStatus`（用于 `TeleportDetectCriterion`） |
 | `ScoreboardCommandMixin` | `net.minecraft.server.commands.ScoreboardCommand` | `setScore` | 兼容旧版：`mtrq_quest_complete` 计分板目标触发 `legacy_trigger_<score>` |
+| `SidingAccessor` / `VehicleAccessor` / `VehicleSchemaAccessor` | MTR 内部类型 | Accessor | 暴露列车、车辆 schema、siding 信息给 `TscStatus` |
 
 ---
 
@@ -392,35 +418,36 @@ tryAdvance(... triggerId)
 5. **解耦设计** — 核心逻辑（`QuestDispatcher`）与 Minecraft 特定逻辑（通知、GUI）分离，通过 `IQuestCallbacks` 接口连接
 6. **MTR 集成非侵入** — 通过 Mixin + 共享状态（`TscStatus`）实现，不修改 MTR 代码
 7. **签名保护** — 任务/分类的远程写入需要 HMAC-MD5 签名，防止滥用
-8. **统一 Gson 配置** — `NQuestGson` 统一注册 CriteriaRegistry 工厂，QuestPersistence 和 QuestUserDatabase 共享同一 Gson 实例
+8. **统一 Gson 配置** — `NQuestGson` 统一注册 CriteriaRegistry 工厂，QuestPersistence、QuestProgressPersistence、RankingApiClient、PendingCompletions 共享同一 Gson 实例
+9. **可审计事件日志** — 任务生命周期事件按天写入服务端文本日志，支持时区、保留天数和失败原因类型展开
 
 ### 待关注事项
 1. **JSON Schema 过时** — `docs/json_schema.txt` 未反映代码中的全部条件类型和字段，需要更新
 2. **单任务限制** — 玩家同时只能进行一个任务，`activeQuests` 虽为 Map 但实际被限制为单条目
 3. **QuestHistoryScreen 总数估算** — 历史记录无法获取精确总数，使用 `99999` 作为占位值
 4. **TscStatus 同步时序** — 更新请求（tick 5）和任务推进（tick 15）之间有 0.5 秒间隔，依赖 MTR Simulator 在此期间完成 tick
-5. **错误处理** — `addQuestCompletion` 的 SQLException 被包装为 RuntimeException
+5. **远端 API 降级** — 资格检查失败时默认允许开始任务；完成提交失败时依赖 `pending_completions.jsonl` 后续重放
 6. **QuestCompletionDetailScreen 初始化顺序** — `rowContentStarts = 1` 在 `init()` 之后才设置
 7. **所有 GUI 文本为英文硬编码** — 无 i18n 支持
 8. **preTouchDescriptions()** — 通过临时 expand() 预加载 MTR 站名的异步解析
-9. **questSnapshot 存储开销** — PlayerProfile JSON 中现在包含完整 Quest 定义副本；活跃任务数较少（当前限制为 1）所以影响可控
+9. **questSnapshot 存储开销** — quest_sessions JSON 中现在包含完整 Quest 定义副本；活跃任务数较少（当前限制为 1）所以影响可控
 
 
 ---
 
 
-## Quest DRAFT 状态
+## Quest 可见性状态
 
 在 `Quest` 模型上有一个 `status` 枚举字段：
 
 ```java
-public enum QuestStatus { DRAFT, PUBLISHED }
+public enum QuestStatus { PRIVATE, STAGING, PUBLIC }
 ```
 
-- **[Quest.java](src/main/java/cn/zbx1425/nquestmod/data/quest/Quest.java)** — 新增 `QuestStatus status` 字段，默认 `DRAFT`（安全优先：新建的 Quest 默认不对玩家可见）
-- **[QuestDispatcher.java](src/main/java/cn/zbx1425/nquestmod/data/QuestDispatcher.java)** 的 `startQuest()` — 增加检查：若 `quest.status == DRAFT && !isDebugMode(player)`，则抛出 `QuestException`（类型如 `QUEST_NOT_PUBLISHED`）
-- **sgui/QuestListScreen** — 过滤列表，普通玩家只看到 `PUBLISHED` 状态的 Quest。若当前玩家有权限 2+（或处于调试模式），可额外看到 DRAFT Quest 并以特殊样式标注（如灰色斜体名 + "[DRAFT]" 标签）
-- **JSON 序列化** — `status` 字段随 Quest JSON 持久化；旧文件不含 `status` 字段时，Gson 反序列化默认值应为 `PUBLISHED`（向后兼容，已发布 Quest 不会突然消失）
+- **[Quest.java](src/main/java/cn/zbx1425/nquestmod/data/quest/Quest.java)** — `getEffectiveStatus()` 在旧文件缺少 `status` 时返回 `PUBLIC`，保持向后兼容
+- **可见性规则** — `PUBLIC` 对所有玩家可见；`STAGING` 仅调试模式可见；`PRIVATE` 需要调试模式且玩家 UUID 在 `creators` 中
+- **[QuestDispatcher.java](src/main/java/cn/zbx1425/nquestmod/data/QuestDispatcher.java)** 的 `startQuest()` — 若玩家不可见该 Quest，则抛出 `QuestException.Type.QUEST_NOT_PUBLISHED`
+- **sgui/QuestListScreen** — 普通玩家只看到 `PUBLIC` Quest；调试/作者视角可看到更多状态并以特殊样式标注
 
 ---
 
@@ -428,7 +455,7 @@ public enum QuestStatus { DRAFT, PUBLISHED }
 
 引入一个 **per-player 调试标志**，通过命令开关控制。
 - 在 `QuestDispatcher` 中维护一个 `Set<UUID> debugPlayers`（仅内存，不持久化——调试状态不应跨重启保留）
-- 新增 `/nquest debug [player]`（权限等级 2）— 切换调试模式开关
+- `/nquest debugMode [participant]`（权限等级 2）— 切换调试模式开关
 - 执行后向玩家发送聊天消息确认当前状态
 
 ---
@@ -474,13 +501,13 @@ public enum QuestStatus { DRAFT, PUBLISHED }
    - `updatePlayers()` / `triggerManualCriterion()` 使用 `progress.questSnapshot` 而非全局 `quests` map
 
 8. **持久化适配：**
-   - `QuestPersistence` 和 `QuestUserDatabase` 统一使用 `NQuestGson.INSTANCE`
-   - PlayerProfile JSON 中的 QuestProgress 可完整序列化（questSnapshot + StepState），断线重连后恢复
+   - `QuestPersistence`、`QuestProgressPersistence`、`RankingApiClient` 和 `PendingCompletions` 统一使用 `NQuestGson.INSTANCE`
+   - quest_sessions JSON 中的 QuestProgress 可完整序列化（questSnapshot + StepState），断线重连后恢复
 
 ### 断线重连流程
 
 ```
-玩家断线 → Gson 序列化 QuestProgress（questSnapshot 原始形式 + StepState 路径状态）→ SQLite
+玩家断线 → Gson 序列化 QuestProgress（questSnapshot 原始形式 + StepState 路径状态）→ quest_sessions JSON
 玩家重连 → 反序列化 → expandedCurrentStep = null（transient）
 下一秒 tryAdvance → expand() 重建展开树 → StepState 中的路径仍有效 → 无缝继续
 ```
