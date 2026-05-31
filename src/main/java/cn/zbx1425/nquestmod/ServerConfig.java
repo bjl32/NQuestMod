@@ -89,6 +89,10 @@ public class ServerConfig {
 
     public ConfigItem<String> websiteUrl;
 
+    public ConfigItem<String> eventLogDir;
+    public ConfigItem<String> eventLogTimezone;
+    public ConfigItem<Integer> eventLogRetentionDays;
+
     private Path path;
     private long mTime;
 
@@ -113,6 +117,10 @@ public class ServerConfig {
 
         websiteUrl = new ConfigItem<>(json, "websiteUrl", "", value -> value);
 
+        eventLogDir = new ConfigItem<>(json, "eventLogDir", "logs/nquest", value -> value);
+        eventLogTimezone = new ConfigItem<>(json, "eventLogTimezone", "UTC", value -> value);
+        eventLogRetentionDays = new ConfigItem<>(json, "eventLogRetentionDays", 7, Integer::parseInt);
+
         if (!Files.exists(configPath)) save(configPath);
     }
 
@@ -131,6 +139,10 @@ public class ServerConfig {
         commandSigningKey.writeJson(json);
 
         websiteUrl.writeJson(json);
+
+        eventLogDir.writeJson(json);
+        eventLogTimezone.writeJson(json);
+        eventLogRetentionDays.writeJson(json);
 
         Files.writeString(configPath, new GsonBuilder().setPrettyPrinting().create().toJson(json));
     }

@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class QuestSyncClient {
@@ -91,7 +92,8 @@ public class QuestSyncClient {
                 SyncBundle bundle = fetchSyncBundle();
                 if (bundle == null) return;
 
-                writeBundleToCache(bundle);
+                Map<String, Quest> oldQuests = snapshotCurrentQuests();
+                writeBundleToCache(bundle, oldQuests);
 
                 server.execute(() -> {
                     try {
@@ -164,8 +166,23 @@ public class QuestSyncClient {
         return bundle;
     }
 
-    private void writeBundleToCache(SyncBundle bundle) throws IOException {
-        Map<String, Quest> oldQuests = NQuestMod.INSTANCE.questDispatcher.quests;
+    private Map<String, Quest> snapshotCurrentQuests() throws Exception {
+        CompletableFuture<Map<String, Quest>> future = new CompletableFuture<>();
+        server.execute(() -> {
+            try {
+                if (NQuestMod.INSTANCE.questDispatcher == null) {
+                    future.complete(new HashMap<>());
+                } else {
+                    future.complete(new HashMap<>(NQuestMod.INSTANCE.questDispatcher.quests));
+                }
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+            }
+        });
+        return future.get(10, TimeUnit.SECONDS);
+    }
+
+    private void writeBundleToCache(SyncBundle bundle, Map<String, Quest> oldQuests) throws IOException {
         int written = 0;
         for (Map.Entry<String, Quest> entry : bundle.quests.entrySet()) {
             Quest oldQuest = oldQuests.get(entry.getKey());

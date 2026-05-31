@@ -22,7 +22,8 @@ public interface IQuestCallbacks {
 
     void onQuestAborted(QuestDispatcher questEngine, UUID playerUuid, Quest quest);
 
-    void onQuestFailed(QuestDispatcher questEngine, UUID playerUuid, Quest quest, Component reason);
+    void onQuestFailed(QuestDispatcher questEngine, UUID playerUuid, Quest quest,
+                       Component reason, String failureType);
 
     void onPlayerBanned(UUID playerUuid, List<RankingApiClient.ActiveBan> activeBans);
 

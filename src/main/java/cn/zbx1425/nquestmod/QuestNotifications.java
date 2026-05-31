@@ -30,9 +30,11 @@ import java.util.concurrent.TimeUnit;
 public class QuestNotifications implements IQuestCallbacks {
 
     private final MinecraftServer server;
+    private final QuestEventLogger questEventLogger;
 
-    public QuestNotifications(MinecraftServer server) {
+    public QuestNotifications(MinecraftServer server, QuestEventLogger questEventLogger) {
         this.server = server;
+        this.questEventLogger = questEventLogger;
     }
 
     public void onPlayerJoin(QuestDispatcher questEngine, UUID playerUuid) {
@@ -46,6 +48,7 @@ public class QuestNotifications implements IQuestCallbacks {
     public void onQuestStarted(QuestDispatcher questEngine, UUID playerUuid, Quest quest) {
         ServerPlayer player = server.getPlayerList().getPlayer(playerUuid);
         if (player == null) return;
+        questEventLogger.logStart(player.getGameProfile().getName(), quest.id);
         player.sendSystemMessage(Component.literal("⭐ Quest Started! ⭐")
                 .withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD).withBold(true)), false);
         player.sendSystemMessage(Component.literal(quest.name).withStyle(ChatFormatting.YELLOW), false);
@@ -74,6 +77,10 @@ public class QuestNotifications implements IQuestCallbacks {
     public void onStepCompleted(QuestDispatcher questEngine, UUID playerUuid, Quest quest, QuestProgress progress) {
         ServerPlayer player = server.getPlayerList().getPlayer(playerUuid);
         if (player == null) return;
+        if (progress.currentStepIndex < quest.steps.size()) {
+            questEventLogger.logProgress(player.getGameProfile().getName(),
+                    quest.id, progress.currentStepIndex + 1, quest.steps.size());
+        }
 
         if (progress.currentStepIndex > 0) {
             Step completedStep = quest.steps.get(progress.currentStepIndex - 1);
@@ -106,6 +113,7 @@ public class QuestNotifications implements IQuestCallbacks {
     public void onQuestCompleted(QuestDispatcher questEngine, UUID playerUuid, Quest quest, QuestCompletionData data) {
         ServerPlayer player = server.getPlayerList().getPlayer(playerUuid);
         if (player == null) return;
+        questEventLogger.logFinish(player.getGameProfile().getName(), quest.id);
         boolean debug = questEngine.isDebugMode(playerUuid);
         player.sendSystemMessage(Component.literal("⭐ Quest Complete! ⭐")
                 .withStyle(Style.EMPTY.withColor(ChatFormatting.GOLD).withBold(true)), false);
@@ -154,6 +162,7 @@ public class QuestNotifications implements IQuestCallbacks {
     public void onQuestAborted(QuestDispatcher questEngine, UUID playerUuid, Quest quest) {
         ServerPlayer player = server.getPlayerList().getPlayer(playerUuid);
         if (player == null) return;
+        questEventLogger.logAbort(player.getGameProfile().getName(), quest.id);
         player.sendSystemMessage(Component.literal("✘ Quest Aborted ✘")
                 .withStyle(Style.EMPTY.withColor(ChatFormatting.RED).withBold(true)), false);
         player.sendSystemMessage(Component.literal(quest.name).withStyle(ChatFormatting.YELLOW), false);
@@ -163,9 +172,11 @@ public class QuestNotifications implements IQuestCallbacks {
     }
 
     @Override
-    public void onQuestFailed(QuestDispatcher questEngine, UUID playerUuid, Quest quest, Component reason) {
+    public void onQuestFailed(QuestDispatcher questEngine, UUID playerUuid, Quest quest,
+                              Component reason, String failureType) {
         ServerPlayer player = server.getPlayerList().getPlayer(playerUuid);
         if (player == null) return;
+        questEventLogger.logFail(player.getGameProfile().getName(), quest.id, failureType);
         player.sendSystemMessage(Component.literal("✘ Quest Failed ✘")
             .withStyle(Style.EMPTY.withColor(ChatFormatting.RED).withBold(true)), false);
         player.sendSystemMessage(Component.literal(quest.name).withStyle(ChatFormatting.YELLOW), false);

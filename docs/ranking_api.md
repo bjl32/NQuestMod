@@ -72,6 +72,10 @@ CREATE TABLE player_balances (
 
 Called by the Mod when a player completes a quest (non-debug mode).
 
+**Headers:**
+
+- `Idempotency-Key`: stable UUID for the quest attempt. Backend must treat repeated requests with the same key as the same completion and return the original result without awarding QP twice.
+
 **Request:**
 ```json
 {

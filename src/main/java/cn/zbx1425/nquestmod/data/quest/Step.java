@@ -5,12 +5,16 @@ import cn.zbx1425.nquestmod.data.criteria.CriterionContext;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public class Step {
 
     public Criterion criteria;
     public Criterion failureCriteria;
+
+    public record FailureResult(Component displayRepr, String criterionType) {}
 
     public Step(Criterion criteria, Criterion failureCriteria) {
         this.criteria = criteria;
@@ -21,18 +25,24 @@ public class Step {
         return criteria != null && criteria.evaluate(player, ctx);
     }
 
-    public Optional<Component> evaluateFailure(
+    public Optional<FailureResult> evaluateFailure(
             ServerPlayer player, CriterionContext failCtx,
             Step defaultCriteria, CriterionContext defaultFailCtx) {
         if (failureCriteria != null) {
-            if (failureCriteria.evaluate(player, failCtx)) {
-                return Optional.of(failureCriteria.getDisplayRepr());
+            List<String> failureTypes = new ArrayList<>();
+            if (failureCriteria.evaluateFailureTypes(player, failCtx, failureTypes)) {
+                return Optional.of(new FailureResult(
+                        failureCriteria.getDisplayRepr(),
+                        String.join("+", failureTypes)));
             }
             return Optional.empty();
         } else if (defaultCriteria != null && defaultCriteria.failureCriteria != null) {
             // Step-wide failure criteria overrides quest-wide failure criteria
-            if (defaultCriteria.failureCriteria.evaluate(player, defaultFailCtx)) {
-                return Optional.of(defaultCriteria.failureCriteria.getDisplayRepr());
+            List<String> failureTypes = new ArrayList<>();
+            if (defaultCriteria.failureCriteria.evaluateFailureTypes(player, defaultFailCtx, failureTypes)) {
+                return Optional.of(new FailureResult(
+                        defaultCriteria.failureCriteria.getDisplayRepr(),
+                        String.join("+", failureTypes)));
             }
         }
         return Optional.empty();

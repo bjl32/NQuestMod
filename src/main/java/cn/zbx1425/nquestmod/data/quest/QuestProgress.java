@@ -5,6 +5,7 @@ import java.util.*;
 public class QuestProgress {
 
     public String questId;
+    public UUID attemptId;
     public int currentStepIndex;
     public long questStartTime;
 
@@ -29,7 +30,16 @@ public class QuestProgress {
         this.expandedDefaultCriteria = null;
     }
 
+    public boolean consumeDirty() {
+        boolean dirty = false;
+        if (criteriaState != null) dirty |= criteriaState.consumeDirty();
+        if (failureCriteriaState != null) dirty |= failureCriteriaState.consumeDirty();
+        if (defaultFailureCriteriaState != null) dirty |= defaultFailureCriteriaState.consumeDirty();
+        return dirty;
+    }
+
     public void ensureInitialized() {
+        if (attemptId == null) attemptId = UUID.randomUUID();
         if (previousSessionsStepDurationsMillis == null) previousSessionsStepDurationsMillis = new HashMap<>();
         if (stepLinesRidden == null) stepLinesRidden = new HashMap<>();
     }

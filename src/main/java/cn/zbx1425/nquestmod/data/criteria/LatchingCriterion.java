@@ -3,6 +3,8 @@ package cn.zbx1425.nquestmod.data.criteria;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.List;
+
 public class LatchingCriterion implements Criterion {
 
     protected Criterion base;
@@ -19,6 +21,24 @@ public class LatchingCriterion implements Criterion {
             return true;
         }
         return false;
+    }
+
+    @Override
+    public boolean evaluateFailureTypes(ServerPlayer player, CriterionContext ctx, List<String> failureTypes) {
+        if (ctx.getBoolean("fulfilled", false)) {
+            base.collectLeafTypes(failureTypes);
+            return true;
+        }
+        if (base.evaluateFailureTypes(player, ctx.child("b"), failureTypes)) {
+            ctx.setBoolean("fulfilled", true);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void collectLeafTypes(List<String> failureTypes) {
+        base.collectLeafTypes(failureTypes);
     }
 
     @Override

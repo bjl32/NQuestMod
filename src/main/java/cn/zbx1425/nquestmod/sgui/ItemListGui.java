@@ -103,15 +103,17 @@ public abstract class ItemListGui<TItem> extends ParentedGui {
             }
             isLoading.set(false);
         })).exceptionally(ex -> {
-            NQuestMod.LOGGER.error("Error loading items for ItemListGui", ex);
-            for (int slot = rowContentStarts * 9; slot < (rowContentEnds + 1) * 9; slot++) {
-                clearSlot(slot);
-            }
-            setSlot((int)Math.ceil((rowContentStarts + rowContentEnds) / 2.0) * 9 + 4, new GuiElementBuilder(Items.BARRIER)
-                .setName(Component.literal("Error loading items"))
-                .addLoreLine(Component.literal(ex.getMessage()))
-            );
-            isLoading.set(false);
+            getPlayer().getServer().execute(() -> {
+                NQuestMod.LOGGER.error("Error loading items for ItemListGui", ex);
+                for (int slot = rowContentStarts * 9; slot < (rowContentEnds + 1) * 9; slot++) {
+                    clearSlot(slot);
+                }
+                setSlot((int)Math.ceil((rowContentStarts + rowContentEnds) / 2.0) * 9 + 4, new GuiElementBuilder(Items.BARRIER)
+                    .setName(Component.literal("Error loading items"))
+                    .addLoreLine(Component.literal(String.valueOf(ex.getMessage())))
+                );
+                isLoading.set(false);
+            });
             return null;
         });
     }

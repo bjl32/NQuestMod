@@ -43,6 +43,30 @@ dependencies {
     modImplementation include("eu.pb4:sgui:${rootProject:sgui_version}")
 }
 
+sourceSets {
+    unitTest {
+        java.srcDir 'src/unitTest/java'
+        compileClasspath += sourceSets.main.output + configurations.compileClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+tasks.register('runUnitTests', JavaExec) {
+    dependsOn unitTestClasses
+    classpath = sourceSets.unitTest.runtimeClasspath
+    mainClass = 'cn.zbx1425.nquestmod.QuestEventLoggerTest'
+}
+
+tasks.register('runCriterionUnitTests', JavaExec) {
+    dependsOn unitTestClasses
+    classpath = sourceSets.unitTest.runtimeClasspath
+    mainClass = 'cn.zbx1425.nquestmod.CriterionFailureTypeTest'
+}
+
+test {
+    dependsOn runUnitTests, runCriterionUnitTests
+}
+
 processResources {
     inputs.property "version", project.version
     inputs.property "minecraft_version", project.minecraft_version

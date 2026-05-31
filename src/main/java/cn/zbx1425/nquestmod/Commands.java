@@ -18,6 +18,7 @@ import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -284,11 +285,14 @@ public class Commands {
     }
 
     private static void removeQuestDefinition(String questId) throws CommandSyntaxException {
-        if (NQuestMod.INSTANCE.questDispatcher.quests.remove(questId) == null) {
+        if (!NQuestMod.INSTANCE.questDispatcher.quests.containsKey(questId)) {
             throw new QuestException(QuestException.Type.QUEST_NOT_FOUND).createMinecraftException();
         }
+        Map<String, Quest> updatedQuests = new HashMap<>(NQuestMod.INSTANCE.questDispatcher.quests);
+        updatedQuests.remove(questId);
         try {
             NQuestMod.INSTANCE.questStorage.removeQuestDefinition(questId);
+            NQuestMod.INSTANCE.questDispatcher.reloadQuests(updatedQuests);
         } catch (Exception ex) {
             throw new SimpleCommandExceptionType(Component.literal("Failed to delete quest definition: " + ex)).create();
         }

@@ -19,14 +19,23 @@ public class QuestDispatcher {
 
     private final IQuestCallbacks callback;
     private final RankingApiClient rankingApi;
+    private final QuestProgressPersistence profileStorage;
     public Map<String, Quest> quests;
     public final Map<UUID, PlayerProfile> playerProfiles = new HashMap<>();
     private final Set<UUID> debugPlayers = new HashSet<>();
 
-    public QuestDispatcher(IQuestCallbacks callback, RankingApiClient rankingApi) {
+    public QuestDispatcher(IQuestCallbacks callback, RankingApiClient rankingApi,
+                           QuestProgressPersistence profileStorage) {
         this.callback = callback;
         this.rankingApi = rankingApi;
+        this.profileStorage = profileStorage;
         this.quests = Map.of();
+    }
+
+    private void persistProfile(PlayerProfile profile) {
+        if (profileStorage != null) {
+            profileStorage.save(profile.playerUuid, profile.activeQuests);
+        }
     }
 
     public boolean isDebugMode(UUID playerUuid) {
@@ -53,9 +62,11 @@ public class QuestDispatcher {
 
         if (!deletedQuestIds.isEmpty()) {
             for (PlayerProfile profile : playerProfiles.values()) {
+                boolean changed = false;
                 for (String deletedId : deletedQuestIds) {
                     QuestProgress progress = profile.activeQuests.remove(deletedId);
                     if (progress != null) {
+                        changed = true;
                         Quest quest = progress.questSnapshot != null
                                 ? progress.questSnapshot
                                 : this.quests.get(deletedId);
@@ -64,6 +75,7 @@ public class QuestDispatcher {
                         }
                     }
                 }
+                if (changed) persistProfile(profile);
             }
         }
 
@@ -142,6 +154,7 @@ public class QuestDispatcher {
 
         QuestProgress progress = new QuestProgress();
         progress.questId = questId;
+        progress.attemptId = UUID.randomUUID();
         progress.questSnapshot = quest;
         progress.currentStepIndex = 0;
         progress.questStartTime = System.currentTimeMillis();
@@ -151,6 +164,7 @@ public class QuestDispatcher {
         progress.resetStepStates();
 
         profile.activeQuests.put(questId, progress);
+        persistProfile(profile);
         callback.onQuestStarted(this, playerUuid, quest);
     }
 
@@ -202,6 +216,7 @@ public class QuestDispatcher {
             throw new QuestException(QuestException.Type.QUEST_NOT_STARTED);
         List<QuestProgress> progresses = new ArrayList<>(profile.activeQuests.values());
         profile.activeQuests.clear();
+        persistProfile(profile);
         for (QuestProgress progress : progresses) {
             Quest quest = progress.questSnapshot != null ? progress.questSnapshot : quests.get(progress.questId);
             if (quest != null) {
@@ -212,15 +227,15 @@ public class QuestDispatcher {
 
     private void advanceQuestStep(PlayerProfile profile, QuestProgress progress, Quest quest, ServerPlayer player) {
         long now = System.currentTimeMillis();
+        progress.ensureInitialized();
         progress.finalizeCurrentStep(now);
         progress.currentStepIndex++;
-        callback.onStepCompleted(this, profile.playerUuid, quest, progress);
 
         if (progress.currentStepIndex >= quest.steps.size()) {
             profile.activeQuests.remove(progress.questId);
-            progress.ensureInitialized();
 
             QuestCompletionData completionData = new QuestCompletionData();
+            completionData.clientCompletionId = progress.attemptId != null ? progress.attemptId : UUID.randomUUID();
             completionData.playerUuid = profile.playerUuid;
             completionData.playerName = player.getGameProfile().getName();
             completionData.questId = quest.id;
@@ -245,6 +260,11 @@ public class QuestDispatcher {
             profile.qpBalance += quest.questPoints;
             profile.totalQuestCompletions += 1;
 
+            if (rankingApi != null && rankingApi.isEnabled()) {
+                NQuestMod.INSTANCE.pendingCompletions.enqueue(completionData);
+            }
+            persistProfile(profile);
+            callback.onStepCompleted(this, profile.playerUuid, quest, progress);
             callback.onQuestCompleted(this, profile.playerUuid, quest, completionData);
 
             if (rankingApi != null && rankingApi.isEnabled()) {
@@ -252,6 +272,7 @@ public class QuestDispatcher {
                     if (error != null) {
                         RankingApiClient.ApiException apiEx = RankingApiClient.unwrapApiException(error);
                         if (apiEx != null && "PLAYER_BANNED".equals(apiEx.errorCode)) {
+                            NQuestMod.INSTANCE.pendingCompletions.remove(completionData);
                             player.getServer().execute(() -> {
                                 if (playerProfiles.get(profile.playerUuid) != profile) return;
                                 profile.qpBalance -= quest.questPoints;
@@ -260,10 +281,10 @@ public class QuestDispatcher {
                             });
                             return;
                         }
-                        NQuestMod.LOGGER.error("Failed to submit completion to backend, writing to WAL", error);
-                        NQuestMod.INSTANCE.pendingCompletions.enqueue(completionData);
+                        NQuestMod.LOGGER.error("Failed to submit completion to backend, keeping in WAL", error);
                         return;
                     }
+                    NQuestMod.INSTANCE.pendingCompletions.remove(completionData);
                     player.getServer().execute(() -> {
                         if (playerProfiles.get(profile.playerUuid) != profile) return;
                         profile.qpBalance = response.qpBalance;
@@ -278,6 +299,8 @@ public class QuestDispatcher {
         } else {
             progress.resetStepStates();
             progress.currentStepSessionStartTime = now;
+            persistProfile(profile);
+            callback.onStepCompleted(this, profile.playerUuid, quest, progress);
         }
     }
 
@@ -305,17 +328,24 @@ public class QuestDispatcher {
         }
 
         if (!isDebugMode(profile.playerUuid)) {
-            Optional<Component> failed = currentStep.evaluateFailure(
+            Optional<Step.FailureResult> failed = currentStep.evaluateFailure(
                     player, failureCtx, defaultCriteria, defaultFailCtx);
             if (failed.isPresent()) {
                 profile.activeQuests.remove(progress.questId);
-                callback.onQuestFailed(this, profile.playerUuid, progress.questSnapshot, failed.get());
+                persistProfile(profile);
+                callback.onQuestFailed(this, profile.playerUuid, progress.questSnapshot,
+                        failed.get().displayRepr(), failed.get().criterionType());
                 return;
             }
         }
 
         if (currentStep.evaluate(player, criteriaCtx)) {
             advanceQuestStep(profile, progress, progress.questSnapshot, player);
+            return;
+        }
+
+        if (progress.consumeDirty()) {
+            persistProfile(profile);
         }
     }
 }

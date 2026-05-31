@@ -50,6 +50,7 @@ public class RankingApiClient {
     // --- Write ---
 
     public CompletableFuture<CompletionResponse> submitCompletion(QuestCompletionData data) {
+        UUID clientCompletionId = data.getOrCreateClientCompletionId();
         JsonObject body = new JsonObject();
         body.addProperty("playerUuid", data.playerUuid.toString());
         body.addProperty("playerName", data.playerName);
@@ -60,7 +61,8 @@ public class RankingApiClient {
         body.addProperty("questPoints", data.questPoints);
         body.add("stepDetails", gson.toJsonTree(data.stepDetails));
 
-        return postJson("/completions", body).thenApply(json -> {
+        return postJson("/completions", body,
+                Map.of("Idempotency-Key", clientCompletionId.toString())).thenApply(json -> {
             CompletionResponse resp = new CompletionResponse();
             resp.completionId = json.get("completionId").getAsLong();
             resp.isPersonalBest = json.has("isPersonalBest") && json.get("isPersonalBest").getAsBoolean();
@@ -221,16 +223,21 @@ public class RankingApiClient {
     }
 
     private CompletableFuture<JsonObject> postJson(String path, JsonObject body) {
+        return postJson(path, body, Map.of());
+    }
+
+    private CompletableFuture<JsonObject> postJson(String path, JsonObject body, Map<String, String> extraHeaders) {
         Exception callSite = new Exception("Async origin: POST " + path);
         return CompletableFuture.supplyAsync(() -> {
             try {
-                HttpRequest request = HttpRequest.newBuilder()
+                HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                         .uri(URI.create(config.webBackendUrl.value + path))
                         .header("X-API-Key", config.webApiKey.value)
                         .header("Content-Type", "application/json")
                         .timeout(Duration.ofSeconds(15))
-                        .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(body)))
-                        .build();
+                        .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(body)));
+                extraHeaders.forEach(requestBuilder::header);
+                HttpRequest request = requestBuilder.build();
                 HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() != 200 && response.statusCode() != 201) {
                     throw new ApiException(response.statusCode(), "POST", path, response.body());

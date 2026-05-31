@@ -27,6 +27,25 @@ public class AndCriterion implements Criterion {
     }
 
     @Override
+    public boolean evaluateFailureTypes(ServerPlayer player, CriterionContext ctx, List<String> failureTypes) {
+        List<String> matchedTypes = new java.util.ArrayList<>();
+        for (int i = 0; i < criteria.size(); i++) {
+            if (!criteria.get(i).evaluateFailureTypes(player, ctx.child(i), matchedTypes)) {
+                return false;
+            }
+        }
+        failureTypes.addAll(matchedTypes);
+        return true;
+    }
+
+    @Override
+    public void collectLeafTypes(List<String> failureTypes) {
+        for (Criterion criterion : criteria) {
+            criterion.collectLeafTypes(failureTypes);
+        }
+    }
+
+    @Override
     public Component getDisplayRepr() {
         boolean first = true;
         MutableComponent objectives = Component.literal("").copy();

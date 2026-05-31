@@ -9,6 +9,7 @@ import java.util.function.Supplier;
 public class StepState {
 
     private Map<String, JsonObject> nodeStates = new HashMap<>();
+    private transient boolean dirty = false;
 
     public JsonObject getOrCreate(String path, Supplier<JsonObject> defaultState) {
         return nodeStates.computeIfAbsent(path, k -> defaultState.get());
@@ -25,7 +26,11 @@ public class StepState {
     }
 
     public void setBoolean(String path, String key, boolean value) {
-        getOrCreate(path, JsonObject::new).addProperty(key, value);
+        JsonObject node = getOrCreate(path, JsonObject::new);
+        if (!node.has(key) || node.get(key).getAsBoolean() != value) {
+            node.addProperty(key, value);
+            dirty = true;
+        }
     }
 
     public double getDouble(String path, String key, double defaultValue) {
@@ -35,7 +40,11 @@ public class StepState {
     }
 
     public void setDouble(String path, String key, double value) {
-        getOrCreate(path, JsonObject::new).addProperty(key, value);
+        JsonObject node = getOrCreate(path, JsonObject::new);
+        if (!node.has(key) || node.get(key).getAsDouble() != value) {
+            node.addProperty(key, value);
+            dirty = true;
+        }
     }
 
     public int getInt(String path, String key, int defaultValue) {
@@ -45,6 +54,16 @@ public class StepState {
     }
 
     public void setInt(String path, String key, int value) {
-        getOrCreate(path, JsonObject::new).addProperty(key, value);
+        JsonObject node = getOrCreate(path, JsonObject::new);
+        if (!node.has(key) || node.get(key).getAsInt() != value) {
+            node.addProperty(key, value);
+            dirty = true;
+        }
+    }
+
+    public boolean consumeDirty() {
+        boolean result = dirty;
+        dirty = false;
+        return result;
     }
 }

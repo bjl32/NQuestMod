@@ -251,8 +251,11 @@ tryAdvance(... triggerId)
 | 签名密钥 | `<world>/nquest/command_signer.json` | JSON（UUID） | 首次启动自动生成 |
 | 玩家档案 | `<world>/nquest/user.db` (SQLite) | 表 `player_profiles`（json 列含 QuestProgress.questSnapshot + StepState） | 玩家退出时保存；加入时加载 |
 | 完成记录 | 同上 | 表 `quest_completions`（含 stepDetails JSON） | 任务完成时插入 |
+| 任务事件日志 | `<server>/logs/nquest/quest_events-YYYY-MM-DD.log`（可通过 `eventLogDir` 配置） | UTF-8 文本，每行 `Event player unixTimestamp zoneId questId [detail]` | 任务开始、进度、失败、完成、放弃时追加；默认保留 7 天 |
 
 所有 Gson 序列化/反序列化统一使用 `NQuestGson.INSTANCE`（注册了 `CriteriaRegistry` 工厂），确保 `QuestProgress.questSnapshot` 中的多态 Criterion 树可正确序列化。
+
+任务事件日志配置项：`eventLogDir` 默认 `logs/nquest`（相对服务器根目录），`eventLogTimezone` 默认 `UTC`，`eventLogRetentionDays` 默认 `7`（`0` 表示不自动删除）。
 
 ### 3.6 命令体系
 

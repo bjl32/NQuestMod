@@ -27,6 +27,22 @@ public class OrCriterion implements Criterion {
     }
 
     @Override
+    public boolean evaluateFailureTypes(ServerPlayer player, CriterionContext ctx, List<String> failureTypes) {
+        boolean matched = false;
+        for (int i = 0; i < criteria.size(); i++) {
+            matched |= criteria.get(i).evaluateFailureTypes(player, ctx.child(i), failureTypes);
+        }
+        return matched;
+    }
+
+    @Override
+    public void collectLeafTypes(List<String> failureTypes) {
+        for (Criterion criterion : criteria) {
+            criterion.collectLeafTypes(failureTypes);
+        }
+    }
+
+    @Override
     public Component getDisplayRepr() {
         boolean first = true;
         MutableComponent objectives = Component.literal("").copy();

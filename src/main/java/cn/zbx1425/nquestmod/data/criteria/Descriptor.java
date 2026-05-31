@@ -3,6 +3,8 @@ package cn.zbx1425.nquestmod.data.criteria;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.List;
+
 public class Descriptor implements Criterion {
 
     protected Criterion base;
@@ -25,6 +27,16 @@ public class Descriptor implements Criterion {
     @Override
     public boolean evaluate(ServerPlayer player, CriterionContext ctx) {
         return base.evaluate(player, ctx.child("b"));
+    }
+
+    @Override
+    public boolean evaluateFailureTypes(ServerPlayer player, CriterionContext ctx, List<String> failureTypes) {
+        return base.evaluateFailureTypes(player, ctx.child("b"), failureTypes);
+    }
+
+    @Override
+    public void collectLeafTypes(List<String> failureTypes) {
+        base.collectLeafTypes(failureTypes);
     }
 
     @Override

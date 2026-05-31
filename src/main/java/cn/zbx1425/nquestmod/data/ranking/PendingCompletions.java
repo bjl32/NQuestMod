@@ -27,6 +27,12 @@ public class PendingCompletions {
     }
 
     public synchronized void enqueue(QuestCompletionData data) {
+        var clientCompletionId = data.getOrCreateClientCompletionId();
+        boolean alreadyQueued = readAll().stream()
+                .anyMatch(entry -> entry.data() != null
+                        && clientCompletionId.equals(entry.data().getOrCreateClientCompletionId()));
+        if (alreadyQueued) return;
+
         try {
             String line = gson.toJson(data) + "\n";
             Files.writeString(walFile, line, StandardCharsets.UTF_8,
@@ -51,7 +57,10 @@ public class PendingCompletions {
                 String trimmed = line.trim();
                 if (trimmed.isEmpty()) continue;
                 try {
-                    results.add(new PendingEntry(trimmed, gson.fromJson(trimmed, QuestCompletionData.class)));
+                    QuestCompletionData data = gson.fromJson(trimmed, QuestCompletionData.class);
+                    if (data != null) {
+                        results.add(new PendingEntry(trimmed, data));
+                    }
                 } catch (Exception e) {
                     NQuestMod.LOGGER.warn("Skipping malformed WAL entry: {}", trimmed, e);
                 }
@@ -60,6 +69,36 @@ public class PendingCompletions {
             NQuestMod.LOGGER.error("Failed to read pending completions from WAL", e);
         }
         return results;
+    }
+
+    public synchronized void remove(QuestCompletionData data) {
+        if (!Files.exists(walFile)) return;
+        var clientCompletionId = data.getOrCreateClientCompletionId();
+        try {
+            List<String> currentLines = Files.readAllLines(walFile, StandardCharsets.UTF_8);
+            List<String> remainingLines = new ArrayList<>();
+            for (String line : currentLines) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty()) continue;
+                try {
+                    QuestCompletionData entryData = gson.fromJson(trimmed, QuestCompletionData.class);
+                    if (entryData != null && clientCompletionId.equals(entryData.getOrCreateClientCompletionId())) {
+                        continue;
+                    }
+                } catch (Exception ignored) {
+                }
+                remainingLines.add(line);
+            }
+
+            if (remainingLines.isEmpty()) {
+                Files.deleteIfExists(walFile);
+            } else {
+                Files.write(walFile, remainingLines, StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            }
+        } catch (IOException e) {
+            NQuestMod.LOGGER.error("Failed to remove submitted completion from WAL", e);
+        }
     }
 
     private synchronized void removeSucceededEntries(List<PendingEntry> attempted, List<PendingEntry> failed) {
@@ -109,6 +148,11 @@ public class PendingCompletions {
             submissions.add(rankingApi.submitCompletion(entry.data()).<Void>handle((response, error) -> {
                     QuestCompletionData data = entry.data();
                     if (error != null) {
+                        RankingApiClient.ApiException apiEx = RankingApiClient.unwrapApiException(error);
+                        if (apiEx != null && "PLAYER_BANNED".equals(apiEx.errorCode)) {
+                            NQuestMod.LOGGER.warn("Dropping banned pending completion for quest {}", data.questId);
+                            return null;
+                        }
                         NQuestMod.LOGGER.error("Failed to replay pending completion for quest {}, re-enqueuing", data.questId, error);
                         failed.add(entry);
                     }

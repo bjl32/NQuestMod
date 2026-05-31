@@ -27,6 +27,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.DateTimeException;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -44,6 +46,7 @@ public class NQuestMod implements ModInitializer {
     public PendingCompletions pendingCompletions;
     public QuestDispatcher questDispatcher;
     public QuestNotifications questNotifications;
+    public QuestEventLogger questEventLogger;
     public Map<String, QuestCategory> questCategories = new HashMap<>();
 
     public CommandSigner commandSigner;
@@ -55,7 +58,8 @@ public class NQuestMod implements ModInitializer {
 
         ServerLifecycleEvents.SERVER_STARTING.register((server) -> {
             try {
-                SERVER_CONFIG.load(server.getServerDirectory().toPath().resolve("config").resolve("nquest.json"));
+                Path serverRoot = server.getServerDirectory().toPath();
+                SERVER_CONFIG.load(serverRoot.resolve("config").resolve("nquest.json"));
 
                 Path basePath = server.getWorldPath(LevelResource.ROOT).resolve("nquest");
                 Files.createDirectories(basePath);
@@ -66,9 +70,13 @@ public class NQuestMod implements ModInitializer {
                 rankingApi = new RankingApiClient(SERVER_CONFIG);
                 profileStorage = new QuestProgressPersistence(basePath);
                 pendingCompletions = new PendingCompletions(basePath);
+                questEventLogger = new QuestEventLogger(
+                        resolveEventLogDir(serverRoot),
+                        resolveEventLogZone(),
+                        resolveEventLogRetentionDays());
 
-                questNotifications = new QuestNotifications(server);
-                questDispatcher = new QuestDispatcher(questNotifications, rankingApi);
+                questNotifications = new QuestNotifications(server, questEventLogger);
+                questDispatcher = new QuestDispatcher(questNotifications, rankingApi, profileStorage);
                 questDispatcher.quests = questStorage.loadQuestDefinitions();
 
                 commandSigner = new CommandSigner();
@@ -98,6 +106,14 @@ public class NQuestMod implements ModInitializer {
             }
             if (rankingApi != null) {
                 rankingApi.shutdown();
+            }
+            if (questDispatcher != null && profileStorage != null) {
+                for (PlayerProfile profile : questDispatcher.playerProfiles.values()) {
+                    for (var progress : profile.activeQuests.values()) {
+                        progress.pauseCurrentStep();
+                    }
+                    profileStorage.save(profile.playerUuid, profile.activeQuests);
+                }
             }
             if (questStorage != null && questCategories != null) {
                 try {
@@ -133,6 +149,7 @@ public class NQuestMod implements ModInitializer {
 
                 profile.activeQuests = profileStorage.load(playerUuid);
                 for (var progress : profile.activeQuests.values()) {
+                    progress.ensureInitialized();
                     progress.resumeCurrentStep();
                 }
 
@@ -203,5 +220,28 @@ public class NQuestMod implements ModInitializer {
 
     public static ResourceLocation id(String path) {
         return new ResourceLocation("nquestmod", path);
+    }
+
+    private static Path resolveEventLogDir(Path serverRoot) {
+        Path configured = Path.of(SERVER_CONFIG.eventLogDir.value);
+        return configured.isAbsolute() ? configured : serverRoot.resolve(configured);
+    }
+
+    private static ZoneId resolveEventLogZone() {
+        try {
+            return ZoneId.of(SERVER_CONFIG.eventLogTimezone.value);
+        } catch (DateTimeException e) {
+            LOGGER.warn("Invalid eventLogTimezone {}, using UTC", SERVER_CONFIG.eventLogTimezone.value, e);
+            return ZoneId.of("UTC");
+        }
+    }
+
+    private static int resolveEventLogRetentionDays() {
+        int days = SERVER_CONFIG.eventLogRetentionDays.value;
+        if (days < 0) {
+            LOGGER.warn("Invalid eventLogRetentionDays {}, using 7", days);
+            return 7;
+        }
+        return days;
     }
 }
